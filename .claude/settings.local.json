@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git clone:*)",
+      "Bash(git init:*)",
+      "Bash(git remote add:*)",
+      "Bash(git fetch:*)",
+      "Bash(git checkout:*)",
+      "Bash(touch:*)",
+      "Bash(chmod:*)",
+      "Bash(docker compose exec backend python3:*)",
+      "Bash(./rebuild.sh)",
+      "Bash(docker compose:*)",
+      "Bash(curl:*)",
+      "Bash(python3:*)",
+      "Bash(docker logs:*)",
+      "Bash(echo \"\n# AI Model Configuration\nSIMILARITY_THRESHOLD=0.6\nIMAGE_WEIGHT=0.6\nTEXT_WEIGHT=0.4\")",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsImV4cCI6MTc2Nzc4MjM0NX0.JkoLcWxEmkJrbcxao3wGfJza-YS0qsqw9r_yy0UZqjc\")",
+      "Bash(docker network:*)",
+      "Bash(docker inspect:*)",
+      "Bash(time curl -X POST http://localhost:8000/api/defects/match -F image=@/tmp/test_image.jpg -w '\\nHTTP Status: %{http_code}\\n' --max-time 360)",
+      "Bash(find:*)",
+      "Bash(docker exec:*)",
+      "Bash(ls:*)",
+      "Bash(git check-ignore:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

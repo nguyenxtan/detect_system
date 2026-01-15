@@ -1,0 +1,138 @@
+services:
+  # PostgreSQL Database
+  db:
+    image: pgvector/pgvector:pg15
+    container_name: defect_system_db
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE_NAME}
+    # ❌ KHÔNG expose port ra ngoài trong production
+    expose:
+      - "5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_database.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: defect_system_backend
+    env_file:
+      - .env
+    environment:
+      DATABASE_HOST: db
+      DATABASE_PORT: 5432
+      DATABASE_NAME: ${DATABASE_NAME}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      API_SECRET_KEY: ${API_SECRET_KEY}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      UPLOAD_DIR: /app/data/uploads
+      REFERENCE_DIR: /app/data/reference_images
+      SIMILARITY_THRESHOLD: ${SIMILARITY_THRESHOLD:-0.6}
+      IMAGE_WEIGHT: ${IMAGE_WEIGHT:-0.6}
+      TEXT_WEIGHT: ${TEXT_WEIGHT:-0.4}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      DEBUG: ${DEBUG:-False}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+    # ❌ CHỈ expose cho nginx reverse proxy, không ra internet
+    expose:
+      - "8000"
+    ports:
+      - "127.0.0.1:8000:8000"  # Chỉ bind localhost
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - app-network
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    read_only: false  # Cần write cho /app/data
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${FRONTEND_API_URL:-https://yourdomain.com}
+    container_name: defect_system_frontend
+    # ❌ CHỈ expose cho nginx reverse proxy
+    expose:
+      - "80"
+    ports:
+      - "127.0.0.1:3001:80"  # Chỉ bind localhost
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - app-network
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:rw,noexec,nosuid
+      - /var/run:rw,noexec,nosuid
+
+  # Telegram Bot
+  telegram_bot:
+    build:
+      context: ./telegram_bot
+      dockerfile: Dockerfile
+    container_name: defect_system_telegram_bot
+    env_file:
+      - .env
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      API_BASE_URL: http://backend:8000
+      PYTHONUNBUFFERED: 1
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - app-network
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge

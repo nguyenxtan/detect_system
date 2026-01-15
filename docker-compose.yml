@@ -1,0 +1,81 @@
+services:
+  # PostgreSQL Database
+  db:
+    image: pgvector/pgvector:pg15
+    container_name: defect_system_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+      POSTGRES_DB: defect_system
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_database.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: defect_system_backend
+    environment:
+      DATABASE_HOST: db
+      DATABASE_PORT: 5432
+      DATABASE_NAME: defect_system
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres123
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      API_SECRET_KEY: your-super-secret-key-change-in-production
+      TELEGRAM_BOT_TOKEN: 8278627223:AAHVSJ0tXMcnStmAdZVMjZnpduJrqXl-CbI
+      UPLOAD_DIR: /app/data/uploads
+      REFERENCE_DIR: /app/data/reference_images
+      # AI Model Thresholds
+      SIMILARITY_THRESHOLD: 0.6
+      IMAGE_WEIGHT: 0.6
+      TEXT_WEIGHT: 0.4
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: defect_system_frontend
+    environment:
+      VITE_API_URL: http://localhost:8000
+    ports:
+      - "3001:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # Telegram Bot
+  telegram_bot:
+    build:
+      context: ./telegram_bot
+      dockerfile: Dockerfile
+    container_name: defect_system_telegram_bot
+    environment:
+      TELEGRAM_BOT_TOKEN: 8278627223:AAHVSJ0tXMcnStmAdZVMjZnpduJrqXl-CbI
+      API_BASE_URL: http://backend:8000
+      PYTHONUNBUFFERED: 1
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
