@@ -5,6 +5,9 @@ from typing import List, Optional
 import uuid
 import os
 import aiofiles
+import logging
+
+logger = logging.getLogger(__name__)
 from ...core.database import get_db
 from ...api.deps import get_current_user, get_current_admin_user
 from ...models.user import User
@@ -17,6 +20,8 @@ from ...schemas.defect import (
 )
 from ...ml import get_embedding_service
 from ...core.config import settings
+from ...services.vision_integration import get_vision_service
+import time
 
 router = APIRouter()
 
@@ -194,6 +199,156 @@ async def match_defect(
             "text_weight": settings.TEXT_WEIGHT
         }
     )
+
+
+@router.post("/inspect")
+async def inspect_defect(
+    image: UploadFile = File(...),
+    text_query: Optional[str] = Form(None),
+    match_on_ok: Optional[bool] = Form(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Phase 3: Two-stage defect inspection endpoint.
+
+    Stage 1: VisionEngine detects defects (OK/NG + regions)
+    Stage 2: If NG (or match_on_ok=True), run CLIP matching
+
+    Args:
+        image: Image file to inspect
+        text_query: Optional text query for CLIP matching
+        match_on_ok: Force CLIP matching even if vision result is OK
+
+    Returns:
+        {
+            "vision": {
+                "result": "OK|NG",
+                "anomaly_score": float,
+                "defect_regions": [{x,y,w,h,type,confidence}],
+                "detectors_used": [str],
+                "processing_time_ms": float
+            },
+            "match": null | {
+                "defect_profile": {...},
+                "confidence": float
+            },
+            "processing_time_ms": float
+        }
+
+    Behavior:
+        - If ENABLE_VISION_PIPELINE=False: Falls back to CLIP-only matching
+        - If vision.result="OK": match=null (unless match_on_ok=True)
+        - If vision.result="NG": Crops best region and runs CLIP matching
+        - On vision failure: Falls back to CLIP-only matching with warning
+    """
+    start_time = time.time()
+
+    # Read image once
+    image_data = await image.read()
+
+    # Get services
+    vision_service = get_vision_service()
+    embedding_service = get_embedding_service()
+
+    # Initialize response
+    response = {
+        "vision": None,
+        "match": None,
+        "processing_time_ms": 0.0,
+        "fallback_to_clip": False,
+        "warning": None
+    }
+
+    # STAGE 1: Vision Pipeline
+    vision_result = None
+    if settings.ENABLE_VISION_PIPELINE:
+        vision_result = vision_service.inspect_image(image_data)
+
+        if vision_result:
+            response["vision"] = vision_result
+        else:
+            # Vision failed, will fallback to CLIP
+            response["fallback_to_clip"] = True
+            response["warning"] = "Vision pipeline failed, using CLIP-only matching"
+            logger.warning("Vision pipeline failed, falling back to CLIP-only")
+
+    else:
+        # Vision pipeline disabled
+        response["vision"] = {
+            "result": "N/A",
+            "message": "Vision pipeline disabled (ENABLE_VISION_PIPELINE=False)"
+        }
+
+    # STAGE 2: CLIP Matching Decision
+    should_match = False
+    image_for_matching = image_data  # Default: use full image
+
+    if vision_result and vision_result["result"] == "NG":
+        # Vision detected defects - crop and match
+        should_match = True
+
+        # Try to crop best region
+        defect_regions = vision_result.get("defect_regions", [])
+        if defect_regions:
+            cropped = vision_service.crop_best_region(image_data, defect_regions)
+            if cropped:
+                image_for_matching = cropped
+                logger.info("Using cropped defect region for CLIP matching")
+            else:
+                logger.warning("Failed to crop region, using full image for CLIP matching")
+
+    elif match_on_ok or response["fallback_to_clip"]:
+        # Either forced matching or fallback mode
+        should_match = True
+
+    # Run CLIP matching if needed
+    if should_match:
+        try:
+            # Generate embedding
+            image_embedding = embedding_service.get_image_embedding(image_for_matching)
+
+            # Get all profiles
+            profiles = db.query(DefectProfile).all()
+
+            if not profiles:
+                response["match"] = None
+                response["warning"] = "No defect profiles in database"
+            else:
+                # Convert to dict for matching
+                profile_dicts = []
+                for p in profiles:
+                    profile_dicts.append({
+                        'id': p.id,
+                        'image_embedding': p.image_embedding,
+                        'text_embedding': p.text_embedding,
+                        'profile': p
+                    })
+
+                # Find best match
+                best_match, confidence = embedding_service.find_best_match(
+                    image_embedding,
+                    text_query or "",
+                    profile_dicts
+                )
+
+                if confidence >= settings.SIMILARITY_THRESHOLD:
+                    response["match"] = {
+                        "defect_profile": DefectProfileResponse.model_validate(best_match['profile']).model_dump(),
+                        "confidence": confidence
+                    }
+                else:
+                    response["match"] = None
+                    response["warning"] = f"No confident match found (confidence: {confidence:.2f})"
+
+        except Exception as e:
+            logger.error(f"CLIP matching failed: {e}")
+            response["match"] = None
+            response["warning"] = f"CLIP matching error: {str(e)}"
+
+    # Total processing time
+    response["processing_time_ms"] = (time.time() - start_time) * 1000
+
+    return response
 
 
 @router.get("/incidents", response_model=List[DefectIncidentResponse])

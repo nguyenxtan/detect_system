@@ -1,0 +1,57 @@
+# Vision Engine Default Configuration
+# Phase 2 - PE/PU Surface Defect Detection
+
+# This configuration file should be tuned based on:
+# - Actual defect samples from production
+# - Target false positive/negative rates
+# - QC standards and acceptance criteria
+
+# Anomaly Detection
+anomaly_threshold: 0.5  # 0.0 (all pass) to 1.0 (all fail)
+enable_anomaly_detector: true
+
+# Rule-Based Detectors
+enable_crack_detector: true
+enable_hole_detector: true
+
+# Crack Detector Parameters
+crack_min_length: 20      # Minimum crack length in pixels
+crack_max_width: 5        # Maximum crack width in pixels
+crack_confidence_threshold: 0.7  # Minimum confidence to report
+
+# Hole Detector Parameters
+hole_min_area: 50         # Minimum hole area in square pixels
+hole_max_area: 5000       # Maximum hole area in square pixels
+hole_circularity_threshold: 0.6  # 0.0 to 1.0, higher = more circular
+
+# Image Preprocessing
+# Set to null to use original image size
+resize_width: null
+resize_height: null
+
+# Performance
+use_gpu: false  # Phase 2 is CPU-only
+
+# Tuning Guide:
+#
+# For crack detection:
+# - Increase crack_min_length if too many false positives on texture
+# - Decrease crack_confidence_threshold to catch more subtle cracks
+# - Adjust crack_max_width based on actual crack widths in production
+#
+# For hole detection:
+# - Adjust hole_min_area / hole_max_area based on defect size standards
+# - Increase hole_circularity_threshold for more circular holes only
+# - Decrease threshold to catch irregular voids
+#
+# For anomaly detection:
+# - Increase anomaly_threshold to reduce false positives
+# - Decrease threshold for more sensitive detection
+# - Requires proper training on OK samples
+#
+# Validation process:
+# 1. Collect 50+ labeled samples (OK and NG with defect types)
+# 2. Test with current config
+# 3. Measure false positive rate (FPR) and false negative rate (FNR)
+# 4. Adjust thresholds to meet QC requirements
+# 5. Document changes and re-validate

@@ -1,0 +1,17 @@
+# Vision Engine Requirements (Phase 2)
+# Python 3.8+
+
+# Core dependencies
+numpy>=1.21.0
+opencv-python>=4.5.0
+pyyaml>=5.4.0
+
+# Optional dependencies for future enhancement
+# torch>=1.9.0  # Uncomment when adding CNN-based feature extraction
+# torchvision>=0.10.0
+# scikit-learn>=0.24.0  # For advanced anomaly detection
+
+# Development dependencies (optional)
+# pytest>=6.2.0
+# black>=21.0
+# flake8>=3.9.0

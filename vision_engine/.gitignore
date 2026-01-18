@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Trained models (large files)
+models/*.npz
+models/*.pth
+models/*.pt
+
+# Test outputs
+examples/output_*.jpg
+examples/output_*.png
+examples/*.npz
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Keep README files
+!models/README.md
+!examples/README.md

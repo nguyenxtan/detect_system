@@ -29,11 +29,17 @@ class Settings(BaseSettings):
     REFERENCE_DIR: str = "./data/reference_images"
     MAX_UPLOAD_SIZE: int = 10485760  # 10MB
 
-    # AI Model
+    # AI Model (CLIP)
     MODEL_NAME: str = "openai/clip-vit-base-patch32"
     SIMILARITY_THRESHOLD: float = 0.6
     IMAGE_WEIGHT: float = 0.6
     TEXT_WEIGHT: float = 0.4
+
+    # Phase 3: Vision Pipeline
+    ENABLE_VISION_PIPELINE: bool = False  # Enable two-stage detection
+    VISION_MODEL_VERSION: str = "vision_engine_v0"
+    VISION_ANOMALY_THRESHOLD: float = 0.5
+    VISION_MATCH_ON_OK: bool = False  # If True, run CLIP matching even on OK results
 
     # CORS
     CORS_ORIGINS: str = "http://localhost:3001,http://localhost:3000"

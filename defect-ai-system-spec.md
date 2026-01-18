@@ -4,9 +4,21 @@
 
 ---
 
-## 1. Overview
+## 1. System Positioning & Overview
 
-This system supports **defect recognition and standardized defect description** for industrial products.
+### 1.1 What This System Is
+
+This system is a **Defect Knowledge Base and Decision Support Tool** for Quality Control operations in PE/PU manufacturing environments.
+
+The system supports **defect recognition and standardized defect description** for industrial products.
+
+**Key Positioning:**
+- A knowledge management system for defect descriptions
+- A decision support tool for QC staff
+- NOT a pixel-level vision inspection system
+- NOT an automated OK/NG production line system
+
+### 1.2 Decision Support Architecture
 
 Instead of fully autonomous AI classification, the system follows a **Decision Support Architecture**:
 
@@ -14,6 +26,20 @@ Instead of fully autonomous AI classification, the system follows a **Decision S
 - AI-assisted matching (image + text similarity)
 - Telegram bot interface for real users
 - Full defect history logging for traceability and future training
+
+### 1.3 Current Scope (Phase 1)
+
+**What the system does:**
+- Stores QC-approved defect profiles with reference images
+- Matches user-submitted images to known defect profiles
+- Returns standardized defect descriptions
+- Maintains full audit trail
+
+**What the system does NOT do (in current phase):**
+- Automated defect detection on production lines
+- Pixel-level defect localization
+- Automatic OK/NG decisions
+- Real-time vision inspection
 
 ---
 
@@ -247,15 +273,103 @@ defect_incidents (
 
 ---
 
-## 12. Future Extensions
+## 12. Development Roadmap
 
-* Defect bounding box (YOLO)
-* Severity estimation
-* Customer-specific defect profiles
-* Dashboard analytics
+### Phase 1: Defect Knowledge Base (Current - Deployed)
+
+**Status:** Operational
+
+**Implementation:**
+- Defect profile CRUD via web admin portal
+- CLIP-based image and text embedding generation
+- Vector similarity matching using pgvector
+- Telegram bot interface for defect reporting
+- Full audit trail for all defect incidents
+
+**Use Case:** Post-inspection knowledge management, QC training, defect standardization.
+
+---
+
+### Phase 2: Vision Detection Engine (Planned)
+
+**Objective:** Add automated defect detection capabilities for PE/PU surfaces.
+
+**Planned Capabilities:**
+- Anomaly detection for surface irregularities
+- Defect localization with bounding boxes or segmentation
+- Defect classification (crack, bubble, hole, scratch, etc.)
+- OK/NG decision support
+- Rule-based vision for configurable defect criteria
+
+**Technical Implementation:**
+- Anomaly detection: PatchCore, FastFlow, or similar
+- Object detection: YOLOv8, Faster R-CNN
+- Segmentation: U-Net, Mask R-CNN
+- Model fine-tuning on PE/PU manufacturing dataset
+- GPU acceleration for real-time inference
+- Edge deployment for production line integration
+
+**Deployment Considerations:**
+- Separate from Phase 1 initially (independent operation)
+- Requires GPU infrastructure
+- Performance benchmarks for speed and accuracy
+- Configurable sensitivity and thresholds
+
+---
+
+### Phase 3: Integrated Vision + Knowledge System (Planned)
+
+**Objective:** Combine automated defect detection with standardized QC knowledge.
+
+**Integrated Architecture:**
+
+```
+[Vision Engine] → Detect defect region → Extract ROI
+       ↓
+[Knowledge Base] → Match ROI to reference profiles → Return standardized description
+       ↓
+[Audit System] → Log detection + description + confidence
+```
+
+**Benefits:**
+- Automated detection with human-readable explanations
+- Consistent defect terminology across automated and manual inspection
+- Full traceability: detection logic + description matching
+- Continuous improvement via feedback loop
+
+**Technical Integration:**
+- Vision engine provides defect ROI coordinates
+- Knowledge system performs similarity matching on ROI
+- Combined confidence: Detection confidence × Description match score
+- Unified API for detection and knowledge retrieval
+
+**Deployment Architecture:**
+- Vision engine: Edge inference (production line)
+- Knowledge system: Centralized server (cross-site knowledge sharing)
+- Hybrid mode: Local detection + cloud knowledge lookup
+
+**Governance:**
+- QC override and correction capabilities
+- Feedback loop updates knowledge base
+- Model versioning and rollback
+- A/B testing framework
+
+---
+
+## 13. Design Principles (Applies to All Phases)
+
+* **AI supports QC, does not replace QC** - Final decisions remain with trained personnel
+* **Explainability over accuracy** - QC must understand system recommendations
+* **Incremental adoption** - Start simple, add complexity only when needed
+* **Traceability and auditability** - Every decision traceable to source data and model version
+* **Human-in-the-loop** - QC knowledge is the source of truth
 
 ---
 
 ## End of Specification
+
+**Document Version:** 1.1
+**Last Updated:** 2026-01-18
+**System Type:** Defect Knowledge & Decision Support (Not Vision Inspection)
 
 ```
