@@ -50,10 +50,10 @@ export const authAPI = {
 // Defect API
 export const defectAPI = {
   getProfiles: (params) =>
-    api.get('/api/defects/profiles/', { params }),
+    api.get('/api/defects/profiles', { params }),
 
   getProfile: (id) =>
-    api.get(`/api/defects/profiles/${id}/`),
+    api.get(`/api/defects/profiles/${id}`),
 
   createProfile: (formData) =>
     api.post('/api/defects/profiles', formData, {
@@ -66,7 +66,7 @@ export const defectAPI = {
     }),
 
   getIncidents: (params) =>
-    api.get('/api/defects/incidents/', { params }),
+    api.get('/api/defects/incidents', { params }),
 };
 
 // User API
