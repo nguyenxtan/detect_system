@@ -20,7 +20,8 @@ from ...schemas.defect import (
 )
 from ...ml import get_embedding_service
 from ...core.config import settings
-from ...services.vision_integration import get_vision_service
+# Temporarily disabled Phase 3 vision integration
+# from ...services.vision_integration import get_vision_service
 import time
 
 router = APIRouter()
@@ -247,7 +248,14 @@ async def inspect_defect(
     image_data = await image.read()
 
     # Get services
-    vision_service = get_vision_service()
+    vision_service = None
+    if settings.ENABLE_VISION_PIPELINE:
+        try:
+            from ...services.vision_integration import get_vision_service
+            vision_service = get_vision_service()
+        except ImportError:
+            logger.warning("Vision integration not available, falling back to CLIP-only")
+
     embedding_service = get_embedding_service()
 
     # Initialize response
@@ -261,7 +269,7 @@ async def inspect_defect(
 
     # STAGE 1: Vision Pipeline
     vision_result = None
-    if settings.ENABLE_VISION_PIPELINE:
+    if settings.ENABLE_VISION_PIPELINE and vision_service:
         vision_result = vision_service.inspect_image(image_data)
 
         if vision_result:
@@ -289,7 +297,7 @@ async def inspect_defect(
 
         # Try to crop best region
         defect_regions = vision_result.get("defect_regions", [])
-        if defect_regions:
+        if defect_regions and vision_service:
             cropped = vision_service.crop_best_region(image_data, defect_regions)
             if cropped:
                 image_for_matching = cropped

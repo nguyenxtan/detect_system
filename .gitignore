@@ -68,7 +68,7 @@ Thumbs.db
 *.pth
 *.pt
 *.onnx
-models/
+/models/
 
 # Database
 *.db
