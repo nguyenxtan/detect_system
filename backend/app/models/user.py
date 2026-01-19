@@ -1,8 +1,6 @@
 """User model"""
-from sqlalchemy import Column, String, Boolean, DateTime
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, String, Boolean, DateTime, Integer, BigInteger
 from datetime import datetime
-import uuid
 from ..core.database import Base
 
 
@@ -10,7 +8,7 @@ class User(Base):
     """User model for authentication"""
     __tablename__ = "users"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, nullable=False, index=True)
     email = Column(String(100), unique=True, nullable=False, index=True)
     hashed_password = Column(String(255), nullable=False)
