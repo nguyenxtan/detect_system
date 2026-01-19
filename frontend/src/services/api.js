@@ -38,53 +38,53 @@ api.interceptors.response.use(
 // Auth API
 export const authAPI = {
   login: (username, password) =>
-    api.post('/api/auth/login', { username, password }),
+    api.post('/api/auth/login/', { username, password }),
 
   register: (userData) =>
-    api.post('/api/auth/register', userData),
+    api.post('/api/auth/register/', userData),
 
   getCurrentUser: () =>
-    api.get('/api/auth/me'),
+    api.get('/api/auth/me/'),
 };
 
 // Defect API
 export const defectAPI = {
   getProfiles: (params) =>
-    api.get('/api/defects/profiles', { params }),
+    api.get('/api/defects/profiles/', { params }),
 
   getProfile: (id) =>
-    api.get(`/api/defects/profiles/${id}`),
+    api.get(`/api/defects/profiles/${id}/`),
 
   createProfile: (formData) =>
-    api.post('/api/defects/profiles', formData, {
+    api.post('/api/defects/profiles/', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
 
   matchDefect: (formData) =>
-    api.post('/api/defects/match', formData, {
+    api.post('/api/defects/match/', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
 
   getIncidents: (params) =>
-    api.get('/api/defects/incidents', { params }),
+    api.get('/api/defects/incidents/', { params }),
 };
 
 // User API
 export const userAPI = {
   getAll: () =>
-    api.get('/api/users'),
+    api.get('/api/users/'),
 
   get: (id) =>
-    api.get(`/api/users/${id}`),
+    api.get(`/api/users/${id}/`),
 
   create: (userData) =>
-    api.post('/api/users', userData),
+    api.post('/api/users/', userData),
 
   update: (id, userData) =>
-    api.put(`/api/users/${id}`, userData),
+    api.put(`/api/users/${id}/`, userData),
 
   delete: (id) =>
-    api.delete(`/api/users/${id}`),
+    api.delete(`/api/users/${id}/`),
 };
 
 export default api;
