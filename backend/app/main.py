@@ -36,9 +36,9 @@ app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads"
 app.mount("/references", StaticFiles(directory=settings.REFERENCE_DIR), name="references")
 
 # Include routers
-app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
-app.include_router(defects.router, prefix="/api/defects", tags=["Defects"])
-app.include_router(users.router, prefix="/api/users", tags=["Users"])
+app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
+app.include_router(defects.router, prefix="/defects", tags=["Defects"])
+app.include_router(users.router, prefix="/users", tags=["Users"])
 
 
 @app.get("/")
