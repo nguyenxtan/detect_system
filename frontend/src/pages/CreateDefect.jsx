@@ -10,6 +10,7 @@ import {
   MenuItem,
   Alert,
   CircularProgress,
+  Autocomplete,
 } from '@mui/material';
 import { CloudUpload } from '@mui/icons-material';
 import Layout from '../components/layout/Layout';
@@ -25,13 +26,13 @@ function CreateDefect() {
   // Data from database
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
-  const [allProducts, setAllProducts] = useState([]); // Store all products for filtering
   const [defectTypes, setDefectTypes] = useState([]);
   const [severityLevels, setSeverityLevels] = useState([]);
 
   const [formData, setFormData] = useState({
-    customer_id: '',
-    product_id: '',
+    customer: '',
+    part_code: '',
+    part_name: '',
     defect_type: '',
     defect_title: '',
     defect_description: '',
@@ -51,7 +52,6 @@ function CreateDefect() {
         ]);
 
         setCustomers(customersRes.data);
-        setAllProducts(productsRes.data);
         setProducts(productsRes.data);
         setDefectTypes(defectTypesRes.data);
         setSeverityLevels(severityLevelsRes.data);
@@ -74,23 +74,10 @@ function CreateDefect() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-
-    // Filter products when customer changes
-    if (name === 'customer_id') {
-      const filtered = allProducts.filter((p) => p.customer_id === parseInt(value));
-      setProducts(filtered);
-      // Reset product selection when customer changes
-      setFormData({
-        ...formData,
-        [name]: value,
-        product_id: '',
-      });
-    } else {
-      setFormData({
-        ...formData,
-        [name]: value,
-      });
-    }
+    setFormData({
+      ...formData,
+      [name]: value,
+    });
   };
 
   const handleFileChange = (e) => {
@@ -104,28 +91,12 @@ function CreateDefect() {
     setLoading(true);
 
     try {
-      // Find selected customer and product
-      const selectedCustomer = customers.find((c) => c.id === parseInt(formData.customer_id));
-      const selectedProduct = allProducts.find((p) => p.id === parseInt(formData.product_id));
-
-      if (!selectedCustomer) {
-        setError('Vui lòng chọn khách hàng');
-        setLoading(false);
-        return;
-      }
-
-      if (!selectedProduct) {
-        setError('Vui lòng chọn sản phẩm');
-        setLoading(false);
-        return;
-      }
-
       const formDataToSend = new FormData();
 
-      // Map to backend expected fields
-      formDataToSend.append('customer', selectedCustomer.customer_name);
-      formDataToSend.append('part_code', selectedProduct.product_code);
-      formDataToSend.append('part_name', selectedProduct.product_name);
+      // Append text fields
+      formDataToSend.append('customer', formData.customer);
+      formDataToSend.append('part_code', formData.part_code);
+      formDataToSend.append('part_name', formData.part_name);
       formDataToSend.append('defect_type', formData.defect_type);
       formDataToSend.append('defect_title', formData.defect_title);
       formDataToSend.append('defect_description', formData.defect_description);
@@ -178,47 +149,80 @@ function CreateDefect() {
 
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
-              <TextField
-                required
-                fullWidth
-                select
-                label="Khách Hàng"
-                name="customer_id"
-                value={formData.customer_id}
-                onChange={handleChange}
-              >
-                <MenuItem value="">
-                  <em>-- Chọn khách hàng --</em>
-                </MenuItem>
-                {customers.map((customer) => (
-                  <MenuItem key={customer.id} value={customer.id}>
-                    {customer.customer_name} ({customer.customer_code})
-                  </MenuItem>
-                ))}
-              </TextField>
+              <Autocomplete
+                freeSolo
+                options={customers.map((c) => c.customer_name)}
+                value={formData.customer}
+                onInputChange={(event, newValue) => {
+                  setFormData({ ...formData, customer: newValue });
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    required
+                    label="Khách Hàng"
+                    placeholder="Gõ hoặc chọn khách hàng"
+                    helperText="Gõ tên khách hàng, hệ thống sẽ gợi ý"
+                  />
+                )}
+              />
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Autocomplete
+                freeSolo
+                options={products}
+                getOptionLabel={(option) => (typeof option === 'string' ? option : option.product_code)}
+                value={formData.part_code}
+                onInputChange={(event, newValue) => {
+                  setFormData({ ...formData, part_code: newValue });
+                  // Auto-fill product name when selecting from dropdown
+                  const product = products.find((p) => p.product_code === newValue);
+                  if (product) {
+                    setFormData({ ...formData, part_code: newValue, part_name: product.product_name });
+                  }
+                }}
+                onChange={(event, newValue) => {
+                  if (newValue && typeof newValue === 'object') {
+                    setFormData({ ...formData, part_code: newValue.product_code, part_name: newValue.product_name });
+                  }
+                }}
+                renderOption={(props, option) => (
+                  <li {...props} key={option.id}>
+                    <Box>
+                      <Typography variant="body2" fontWeight="bold">
+                        {option.product_code}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {option.product_name}
+                      </Typography>
+                    </Box>
+                  </li>
+                )}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    required
+                    label="Mã Sản Phẩm"
+                    placeholder="Gõ mã sản phẩm (VD: GD3346)"
+                    helperText="Nhập mã sản phẩm, tên sẽ tự động điền"
+                  />
+                )}
+              />
             </Grid>
 
             <Grid item xs={12} md={6}>
               <TextField
                 required
                 fullWidth
-                select
-                label="Sản Phẩm"
-                name="product_id"
-                value={formData.product_id}
+                label="Tên Sản Phẩm"
+                name="part_name"
+                value={formData.part_name}
                 onChange={handleChange}
-                disabled={!formData.customer_id}
-                helperText={!formData.customer_id ? 'Vui lòng chọn khách hàng trước' : ''}
-              >
-                <MenuItem value="">
-                  <em>-- Chọn sản phẩm --</em>
-                </MenuItem>
-                {products.map((product) => (
-                  <MenuItem key={product.id} value={product.id}>
-                    {product.product_name} ({product.product_code})
-                  </MenuItem>
-                ))}
-              </TextField>
+                placeholder="VD: Grommet"
+                helperText={formData.part_code && !formData.part_name ? 'Không tìm thấy sản phẩm với mã này. Vui lòng nhập tên thủ công.' : 'Được tự động điền khi nhập mã sản phẩm'}
+                error={formData.part_code && !formData.part_name}
+              />
             </Grid>
 
             <Grid item xs={12} md={6}>
