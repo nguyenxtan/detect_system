@@ -272,6 +272,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         product_code = parts[3]
         product_name = parts[4]
 
+        # Get user context to check if customer is already set
+        user_context = get_user_context(user_id)
+
         # Fetch customer name from API if not in context
         customer_name = None
         if user_context and user_context.get('customer_id') == product_customer_id:
