@@ -19,6 +19,7 @@ import {
   IconButton,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import BrokenImageIcon from '@mui/icons-material/BrokenImage';
 import Layout from '../components/layout/Layout';
 import { defectAPI } from '../services/api';
 
@@ -28,6 +29,7 @@ function DefectList() {
   const [error, setError] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
   const [openImageDialog, setOpenImageDialog] = useState(false);
+  const [failedImages, setFailedImages] = useState(new Set());
 
   useEffect(() => {
     fetchDefects();
@@ -80,6 +82,11 @@ function DefectList() {
   const handleCloseDialog = () => {
     setOpenImageDialog(false);
     setSelectedImage(null);
+  };
+
+  const handleImageError = (imageUrl) => {
+    console.error('Failed to load image:', imageUrl);
+    setFailedImages(prev => new Set([...prev, imageUrl]));
   };
 
   const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -151,28 +158,50 @@ function DefectList() {
                     <TableCell>
                       {defect.reference_images && defect.reference_images.length > 0 ? (
                         <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                          {defect.reference_images.map((imageUrl, index) => (
-                            <Box
-                              key={index}
-                              component="img"
-                              src={`${API_BASE_URL}${imageUrl}`}
-                              alt={`${defect.defect_title} ${index + 1}`}
-                              onClick={() => handleImageClick(`${API_BASE_URL}${imageUrl}`)}
-                              sx={{
-                                width: 60,
-                                height: 60,
-                                objectFit: 'cover',
-                                borderRadius: 1,
-                                cursor: 'pointer',
-                                border: '1px solid #ddd',
-                                '&:hover': {
-                                  opacity: 0.8,
-                                  transform: 'scale(1.05)',
-                                  transition: 'all 0.2s',
-                                }
-                              }}
-                            />
-                          ))}
+                          {defect.reference_images.map((imageUrl, index) => {
+                            const fullImageUrl = `${API_BASE_URL}${imageUrl}`;
+                            const hasFailed = failedImages.has(fullImageUrl);
+
+                            return hasFailed ? (
+                              <Box
+                                key={index}
+                                sx={{
+                                  width: 60,
+                                  height: 60,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  borderRadius: 1,
+                                  border: '1px solid #ddd',
+                                  bgcolor: 'grey.100',
+                                }}
+                              >
+                                <BrokenImageIcon sx={{ color: 'text.disabled', fontSize: 30 }} />
+                              </Box>
+                            ) : (
+                              <Box
+                                key={index}
+                                component="img"
+                                src={fullImageUrl}
+                                alt={`${defect.defect_title} ${index + 1}`}
+                                onClick={() => handleImageClick(fullImageUrl)}
+                                onError={() => handleImageError(fullImageUrl)}
+                                sx={{
+                                  width: 60,
+                                  height: 60,
+                                  objectFit: 'cover',
+                                  borderRadius: 1,
+                                  cursor: 'pointer',
+                                  border: '1px solid #ddd',
+                                  '&:hover': {
+                                    opacity: 0.8,
+                                    transform: 'scale(1.05)',
+                                    transition: 'all 0.2s',
+                                  }
+                                }}
+                              />
+                            );
+                          })}
                         </Box>
                       ) : (
                         <Typography variant="body2" color="textSecondary">

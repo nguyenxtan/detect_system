@@ -94,7 +94,7 @@ async def history_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{API_BASE_URL}/api/defects/incidents",
+                f"{API_BASE_URL}/api/defects/incidents/public",
                 params={"user_id": user_id, "limit": 10}
             )
 
@@ -149,9 +149,11 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         async with httpx.AsyncClient(timeout=timeout) as client:
             files = {"image": ("image.jpg", bytes(photo_bytes), "image/jpeg")}
+            data = {"user_id": str(update.effective_user.id)}
             response = await client.post(
                 f"{API_BASE_URL}/api/defects/match",
-                files=files
+                files=files,
+                data=data
             )
 
         print(f"✅ [DEBUG] Response received: {response.status_code}")
@@ -185,13 +187,18 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Send reference image if available
             if defect_profile.get('reference_images'):
-                ref_image_path = defect_profile['reference_images'][0]
+                ref_image_url = defect_profile['reference_images'][0]
                 try:
-                    with open(ref_image_path, 'rb') as img:
-                        await update.message.reply_photo(
-                            photo=img,
-                            caption="📷 Ảnh tham khảo"
-                        )
+                    # Download reference image from backend
+                    async with httpx.AsyncClient() as client:
+                        ref_response = await client.get(f"{API_BASE_URL}{ref_image_url}")
+                        if ref_response.status_code == 200:
+                            await update.message.reply_photo(
+                                photo=ref_response.content,
+                                caption="📷 Ảnh tham khảo"
+                            )
+                        else:
+                            print(f"Failed to download reference image: {ref_response.status_code}")
                 except Exception as e:
                     print(f"Error sending reference image: {e}")
 

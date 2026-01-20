@@ -145,6 +145,7 @@ def get_defect_profile(
 async def match_defect(
     image: UploadFile = File(...),
     text_query: Optional[str] = Form(None),
+    user_id: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
     """Match an image to defect profiles (Public endpoint for Telegram bot)"""
@@ -191,6 +192,52 @@ async def match_defect(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No confident match found (confidence: {confidence:.2f})"
         )
+
+    # Save uploaded image to disk
+    uploaded_image_path = None
+    if user_id:
+        try:
+            # Create uploads directory if it doesn't exist
+            os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+
+            # Generate unique filename
+            file_extension = os.path.splitext(image.filename or "image.jpg")[1] or ".jpg"
+            unique_filename = f"{uuid.uuid4()}{file_extension}"
+            file_path = os.path.join(settings.UPLOAD_DIR, unique_filename)
+
+            # Save image to disk
+            async with aiofiles.open(file_path, 'wb') as f:
+                await f.write(image_data)
+
+            # Store URL path for database
+            uploaded_image_path = f"/uploads/{unique_filename}"
+            logger.info(f"Saved uploaded image to {file_path}")
+
+        except Exception as e:
+            logger.error(f"Failed to save uploaded image: {e}")
+            # Continue even if image save fails
+
+    # Create DefectIncident record if user_id provided
+    if user_id and uploaded_image_path:
+        try:
+            incident = DefectIncident(
+                user_id=user_id,
+                defect_profile_id=best_match['profile'].id,
+                predicted_defect_type=best_match['profile'].defect_type,
+                confidence=confidence,
+                image_url=uploaded_image_path,
+                image_embedding=image_embedding.tolist() if hasattr(image_embedding, 'tolist') else list(image_embedding),
+                model_version=settings.MODEL_VERSION if hasattr(settings, 'MODEL_VERSION') else "v1.0",
+                notes=text_query or None
+            )
+            db.add(incident)
+            db.commit()
+            logger.info(f"Created DefectIncident for user {user_id}")
+
+        except Exception as e:
+            logger.error(f"Failed to create DefectIncident: {e}")
+            db.rollback()
+            # Continue even if incident creation fails
 
     return DefectMatchResult(
         defect_profile=DefectProfileResponse.model_validate(best_match['profile']),
@@ -367,11 +414,30 @@ def get_defect_incidents(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get defect incidents"""
+    """Get defect incidents (requires authentication)"""
     query = db.query(DefectIncident)
 
     if user_id:
         query = query.filter(DefectIncident.user_id == user_id)
 
     incidents = query.order_by(DefectIncident.created_at.desc()).offset(skip).limit(limit).all()
+    return incidents
+
+
+@router.get("/incidents/public", response_model=List[DefectIncidentResponse])
+def get_defect_incidents_public(
+    user_id: str,
+    limit: int = 10,
+    db: Session = Depends(get_db)
+):
+    """
+    Public endpoint for Telegram bot to retrieve user's incident history.
+    Does not require authentication.
+    """
+    incidents = db.query(DefectIncident).filter(
+        DefectIncident.user_id == user_id
+    ).order_by(
+        DefectIncident.created_at.desc()
+    ).limit(limit).all()
+
     return incidents
