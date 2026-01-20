@@ -10,6 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy bot code
 COPY bot.py .
+COPY context_storage.py .
 
 # Run the bot
 CMD ["python", "bot.py"]
