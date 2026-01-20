@@ -64,24 +64,31 @@ def set_user_customer(user_id: str, customer_id: int, customer_name: str):
     save_contexts(contexts)
 
 
-def set_user_product(user_id: str, product_id: int, product_name: str, product_code: str):
+def set_user_product(user_id: str, product_id: int, product_name: str, product_code: str, customer_id: int = None, customer_name: str = None):
     """
-    Set product for a user
+    Set product for a user (customer is optional)
 
     Args:
         user_id: Telegram user ID
         product_id: Product ID from database
         product_name: Product name for display
         product_code: Product code for display
+        customer_id: Optional customer ID (will be set if provided)
+        customer_name: Optional customer name (will be set if provided)
     """
     contexts = load_contexts()
 
     if user_id not in contexts:
-        raise ValueError("Please set customer first using /set_customer")
+        contexts[user_id] = {}
 
     contexts[user_id]['product_id'] = product_id
     contexts[user_id]['product_name'] = product_name
     contexts[user_id]['product_code'] = product_code
+
+    # Optionally update customer if provided
+    if customer_id is not None:
+        contexts[user_id]['customer_id'] = customer_id
+        contexts[user_id]['customer_name'] = customer_name
 
     save_contexts(contexts)
 
@@ -98,11 +105,16 @@ def get_context_summary(user_id: str) -> str:
     """Get formatted summary of user's context"""
     context = get_user_context(user_id)
 
-    if not context:
-        return "❌ Chưa thiết lập context. Vui lòng dùng /set_customer để bắt đầu."
+    if not context or not context.get('product_id'):
+        return "❌ Chưa thiết lập sản phẩm. Vui lòng dùng /set_product để bắt đầu."
 
-    customer_info = f"✅ Khách hàng: {context.get('customer_name', 'N/A')}"
-    product_info = f"✅ Sản phẩm: {context.get('product_code', 'N/A')} - {context.get('product_name', 'N/A')}" if context.get('product_id') else "❌ Sản phẩm: Chưa thiết lập"
+    product_info = f"✅ Sản phẩm: {context.get('product_code', 'N/A')} - {context.get('product_name', 'N/A')}"
+
+    # Customer is optional
+    if context.get('customer_id'):
+        customer_info = f"✅ Khách hàng: {context.get('customer_name', 'N/A')}"
+    else:
+        customer_info = "ℹ️ Khách hàng: Chưa chọn (tùy chọn)"
 
     return f"""
 📋 **Context hiện tại:**
@@ -110,5 +122,5 @@ def get_context_summary(user_id: str) -> str:
 {customer_info}
 {product_info}
 
-Gửi ảnh để phân tích hoặc dùng /set_customer để thay đổi.
+Gửi ảnh để phân tích hoặc dùng /set_product để thay đổi.
     """.strip()
