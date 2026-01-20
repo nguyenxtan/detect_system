@@ -13,6 +13,18 @@ from app.core.auth import verify_admin
 router = APIRouter()
 
 
+@router.get("/public", response_model=List[CustomerResponse])
+def get_customers_public(
+    db: Session = Depends(get_db)
+):
+    """
+    Get all customers (Public endpoint for Telegram bot)
+    No authentication required
+    """
+    customers = db.query(Customer).all()
+    return customers
+
+
 @router.get("/", response_model=List[CustomerResponse])
 def get_all_customers(
     search: str = Query(None, description="Search by code or name"),

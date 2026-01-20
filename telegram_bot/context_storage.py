@@ -106,7 +106,7 @@ def get_context_summary(user_id: str) -> str:
     context = get_user_context(user_id)
 
     if not context or not context.get('product_id'):
-        return "❌ Chưa thiết lập sản phẩm. Vui lòng dùng /set_product để bắt đầu."
+        return "❌ Chưa thiết lập sản phẩm. Vui lòng dùng /setproduct để bắt đầu."
 
     product_info = f"✅ Sản phẩm: {context.get('product_code', 'N/A')} - {context.get('product_name', 'N/A')}"
 
@@ -122,5 +122,5 @@ def get_context_summary(user_id: str) -> str:
 {customer_info}
 {product_info}
 
-Gửi ảnh để phân tích hoặc dùng /set_product để thay đổi.
+Gửi ảnh để phân tích hoặc dùng /setproduct để thay đổi.
     """.strip()

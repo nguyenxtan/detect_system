@@ -146,7 +146,7 @@ async def set_customer_command(update: Update, context: ContextTypes.DEFAULT_TYP
 
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"{API_BASE_URL}/api/customers/")
+            response = await client.get(f"{API_BASE_URL}/api/customers/public")
 
         if response.status_code == 200:
             customers = response.json()
@@ -188,7 +188,7 @@ async def set_product_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"{API_BASE_URL}/api/products/")
+            response = await client.get(f"{API_BASE_URL}/api/products/public")
 
         if response.status_code == 200:
             all_products = response.json()
