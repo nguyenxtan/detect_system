@@ -16,6 +16,9 @@ class DefectProfileCreate(BaseModel):
     defect_description: str
     keywords: List[str]
     severity: str = "minor"
+    # Context filtering fields
+    customer_id: Optional[int] = None
+    product_id: Optional[int] = None
 
 
 class DefectProfileResponse(BaseModel):
@@ -31,6 +34,9 @@ class DefectProfileResponse(BaseModel):
     severity: str
     reference_images: Optional[List[str]] = []
     created_at: datetime
+    # Context filtering fields
+    customer_id: Optional[int] = None
+    product_id: Optional[int] = None
 
     @field_validator('reference_images', mode='after')
     @classmethod

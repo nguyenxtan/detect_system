@@ -37,11 +37,30 @@ async def create_defect_profile(
     defect_description: str = Form(...),
     keywords: str = Form(...),  # comma-separated
     severity: str = Form("minor"),
+    customer_id: Optional[int] = Form(None),
+    product_id: Optional[int] = Form(None),
     reference_images: List[UploadFile] = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_admin_user)
 ):
     """Create a new defect profile (Admin/QC only)"""
+
+    # Validate context if provided
+    if customer_id is not None and product_id is not None:
+        from ...models.product import Product
+        product = db.query(Product).filter(Product.id == product_id).first()
+
+        if not product:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Product with id {product_id} not found"
+            )
+
+        if product.customer_id != customer_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Product {product_id} does not belong to customer {customer_id}"
+            )
 
     # Get embedding service
     embedding_service = get_embedding_service()
@@ -89,6 +108,8 @@ async def create_defect_profile(
         defect_description=defect_description,
         keywords=keywords_list,
         severity=severity,
+        customer_id=customer_id,
+        product_id=product_id,
         reference_images=image_urls,
         image_embedding=avg_image_embedding.tolist(),
         text_embedding=text_embedding.tolist()
@@ -146,9 +167,17 @@ async def match_defect(
     image: UploadFile = File(...),
     text_query: Optional[str] = Form(None),
     user_id: Optional[str] = Form(None),
+    customer_id: Optional[int] = Form(None),
+    product_id: Optional[int] = Form(None),
     db: Session = Depends(get_db)
 ):
-    """Match an image to defect profiles (Public endpoint for Telegram bot)"""
+    """
+    Match an image to defect profiles (Public endpoint for Telegram bot)
+
+    Context-based filtering (QC-standard):
+    - If customer_id and product_id provided: Filter candidates before similarity matching
+    - If not provided: Use legacy behavior (match against all profiles)
+    """
 
     # Get embedding service
     embedding_service = get_embedding_service()
@@ -161,14 +190,48 @@ async def match_defect(
     image_embedding = embedding_service.get_image_embedding(image_data)
     print(f"[DEBUG] Generated image_embedding type: {type(image_embedding)}, shape: {image_embedding.shape if hasattr(image_embedding, 'shape') else 'no shape'}")
 
-    # Get all profiles
-    profiles = db.query(DefectProfile).all()
+    # Context-based filtering
+    query = db.query(DefectProfile)
+
+    if customer_id is not None and product_id is not None:
+        # Validate product belongs to customer
+        from ...models.product import Product
+        product = db.query(Product).filter(Product.id == product_id).first()
+
+        if not product:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Product with id {product_id} not found"
+            )
+
+        if product.customer_id != customer_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Product {product_id} does not belong to customer {customer_id}"
+            )
+
+        # Filter by context BEFORE similarity matching
+        print(f"[CONTEXT FILTER] customer_id={customer_id}, product_id={product_id}")
+        query = query.filter(
+            DefectProfile.customer_id == customer_id,
+            DefectProfile.product_id == product_id
+        )
+    else:
+        print(f"[LEGACY MODE] No context provided, matching against all profiles")
+
+    profiles = query.all()
 
     if not profiles:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No defect profiles found in database"
-        )
+        if customer_id is not None and product_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No defect profiles configured for this customer/product context"
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No defect profiles found in database"
+            )
 
     # Convert to dict for matching
     profile_dicts = []

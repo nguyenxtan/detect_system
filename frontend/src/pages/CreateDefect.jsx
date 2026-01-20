@@ -38,7 +38,12 @@ function CreateDefect() {
     defect_description: '',
     keywords: '',
     severity: '',
+    customer_id: null,
+    product_id: null,
   });
+
+  // Filtered products based on selected customer
+  const [filteredProducts, setFilteredProducts] = useState([]);
 
   // Fetch data from APIs
   useEffect(() => {
@@ -72,6 +77,16 @@ function CreateDefect() {
     fetchData();
   }, []);
 
+  // Filter products when customer changes
+  useEffect(() => {
+    if (formData.customer_id) {
+      const filtered = products.filter((p) => p.customer_id === formData.customer_id);
+      setFilteredProducts(filtered);
+    } else {
+      setFilteredProducts(products);
+    }
+  }, [formData.customer_id, products]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({
@@ -102,6 +117,14 @@ function CreateDefect() {
       formDataToSend.append('defect_description', formData.defect_description);
       formDataToSend.append('keywords', formData.keywords);
       formDataToSend.append('severity', formData.severity);
+
+      // Append context IDs for context-based filtering
+      if (formData.customer_id) {
+        formDataToSend.append('customer_id', formData.customer_id);
+      }
+      if (formData.product_id) {
+        formDataToSend.append('product_id', formData.product_id);
+      }
 
       // Append images
       selectedFiles.forEach((file) => {
@@ -150,19 +173,38 @@ function CreateDefect() {
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
               <Autocomplete
-                freeSolo
-                options={customers.map((c) => c.customer_name)}
-                value={formData.customer}
-                onInputChange={(event, newValue) => {
-                  setFormData({ ...formData, customer: newValue });
+                options={customers}
+                getOptionLabel={(option) => (typeof option === 'string' ? option : option.customer_name)}
+                value={customers.find((c) => c.id === formData.customer_id) || null}
+                onChange={(event, newValue) => {
+                  if (newValue && typeof newValue === 'object') {
+                    setFormData({
+                      ...formData,
+                      customer: newValue.customer_name,
+                      customer_id: newValue.id,
+                      // Reset product selection when customer changes
+                      part_code: '',
+                      part_name: '',
+                      product_id: null,
+                    });
+                  } else {
+                    setFormData({
+                      ...formData,
+                      customer: '',
+                      customer_id: null,
+                      part_code: '',
+                      part_name: '',
+                      product_id: null,
+                    });
+                  }
                 }}
                 renderInput={(params) => (
                   <TextField
                     {...params}
                     required
                     label="Khách Hàng"
-                    placeholder="Gõ hoặc chọn khách hàng"
-                    helperText="Gõ tên khách hàng, hệ thống sẽ gợi ý"
+                    placeholder="Chọn khách hàng"
+                    helperText="Chọn khách hàng từ danh sách"
                   />
                 )}
               />
@@ -170,21 +212,24 @@ function CreateDefect() {
 
             <Grid item xs={12} md={6}>
               <Autocomplete
-                freeSolo
-                options={products}
+                options={filteredProducts}
                 getOptionLabel={(option) => (typeof option === 'string' ? option : option.product_code)}
-                value={formData.part_code}
-                onInputChange={(event, newValue) => {
-                  setFormData({ ...formData, part_code: newValue });
-                  // Auto-fill product name when selecting from dropdown
-                  const product = products.find((p) => p.product_code === newValue);
-                  if (product) {
-                    setFormData({ ...formData, part_code: newValue, part_name: product.product_name });
-                  }
-                }}
+                value={filteredProducts.find((p) => p.id === formData.product_id) || null}
                 onChange={(event, newValue) => {
                   if (newValue && typeof newValue === 'object') {
-                    setFormData({ ...formData, part_code: newValue.product_code, part_name: newValue.product_name });
+                    setFormData({
+                      ...formData,
+                      part_code: newValue.product_code,
+                      part_name: newValue.product_name,
+                      product_id: newValue.id,
+                    });
+                  } else {
+                    setFormData({
+                      ...formData,
+                      part_code: '',
+                      part_name: '',
+                      product_id: null,
+                    });
                   }
                 }}
                 renderOption={(props, option) => (
@@ -204,10 +249,16 @@ function CreateDefect() {
                     {...params}
                     required
                     label="Mã Sản Phẩm"
-                    placeholder="Gõ mã sản phẩm (VD: GD3346)"
-                    helperText="Nhập mã sản phẩm, tên sẽ tự động điền"
+                    placeholder="Chọn sản phẩm"
+                    helperText={
+                      formData.customer_id
+                        ? `Hiển thị ${filteredProducts.length} sản phẩm của khách hàng này`
+                        : 'Vui lòng chọn khách hàng trước'
+                    }
+                    disabled={!formData.customer_id}
                   />
                 )}
+                disabled={!formData.customer_id}
               />
             </Grid>
 

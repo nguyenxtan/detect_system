@@ -4,8 +4,15 @@ import sys
 import asyncio
 import httpx
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 from dotenv import load_dotenv
+from context_storage import (
+    get_user_context,
+    set_user_customer,
+    set_user_product,
+    clear_user_context,
+    get_context_summary
+)
 
 # Load environment variables
 load_dotenv()
@@ -28,19 +35,19 @@ Xin chào! Tôi là trợ lý AI giúp bạn nhận dạng lỗi sản phẩm.
 
 **Các lệnh:**
 /start - Bắt đầu
+/set_customer - Chọn khách hàng
+/set_product - Chọn sản phẩm
+/context - Xem context hiện tại
 /report - Báo cáo lỗi
 /history - Xem lịch sử 10 báo cáo gần nhất
 /help - Hướng dẫn sử dụng
 
 **Cách sử dụng:**
-1. Gửi ảnh lỗi sản phẩm trực tiếp
-2. Bot sẽ phân tích và trả về:
-   - Loại lỗi
-   - Mô tả chuẩn QC
-   - Ảnh tham khảo
-   - Độ tin cậy (%)
+1. Thiết lập context: /set_customer → /set_product
+2. Gửi ảnh lỗi sản phẩm
+3. Bot phân tích và trả về kết quả
 
-Hãy gửi ảnh để bắt đầu! 📸
+Dùng /set_customer để bắt đầu! 🚀
     """
     await update.message.reply_text(welcome_message, parse_mode='Markdown')
 
@@ -121,10 +128,173 @@ async def history_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Lỗi kết nối API. Vui lòng thử lại sau.")
 
 
+async def context_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /context command - show current context"""
+    user_id = str(update.effective_user.id)
+    summary = get_context_summary(user_id)
+    await update.message.reply_text(summary, parse_mode='Markdown')
+
+
+async def set_customer_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /set_customer command - show customer list"""
+    await update.message.reply_text("🔄 Đang tải danh sách khách hàng...")
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{API_BASE_URL}/api/customers")
+
+        if response.status_code == 200:
+            customers = response.json()
+
+            if not customers:
+                await update.message.reply_text("❌ Không có khách hàng nào trong hệ thống.")
+                return
+
+            # Create inline keyboard with customer buttons
+            keyboard = []
+            for customer in customers:
+                keyboard.append([
+                    InlineKeyboardButton(
+                        text=customer['customer_name'],
+                        callback_data=f"customer_{customer['id']}_{customer['customer_name']}"
+                    )
+                ])
+
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(
+                "👥 **Chọn khách hàng:**",
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+        else:
+            await update.message.reply_text(f"❌ Lỗi API: {response.status_code}")
+
+    except Exception as e:
+        print(f"Error fetching customers: {e}")
+        await update.message.reply_text("❌ Không thể tải danh sách khách hàng. Vui lòng thử lại.")
+
+
+async def set_product_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /set_product command - show product list filtered by customer"""
+    user_id = str(update.effective_user.id)
+    user_context = get_user_context(user_id)
+
+    if not user_context or not user_context.get('customer_id'):
+        await update.message.reply_text(
+            "❌ Vui lòng chọn khách hàng trước bằng lệnh /set_customer"
+        )
+        return
+
+    await update.message.reply_text("🔄 Đang tải danh sách sản phẩm...")
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{API_BASE_URL}/api/products")
+
+        if response.status_code == 200:
+            all_products = response.json()
+            # Filter products by customer_id
+            customer_id = user_context['customer_id']
+            products = [p for p in all_products if p['customer_id'] == customer_id]
+
+            if not products:
+                await update.message.reply_text(
+                    f"❌ Không có sản phẩm nào cho khách hàng {user_context['customer_name']}."
+                )
+                return
+
+            # Create inline keyboard with product buttons
+            keyboard = []
+            for product in products:
+                keyboard.append([
+                    InlineKeyboardButton(
+                        text=f"{product['product_code']} - {product['product_name']}",
+                        callback_data=f"product_{product['id']}_{product['product_code']}_{product['product_name']}"
+                    )
+                ])
+
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(
+                f"📦 **Chọn sản phẩm của {user_context['customer_name']}:**",
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+        else:
+            await update.message.reply_text(f"❌ Lỗi API: {response.status_code}")
+
+    except Exception as e:
+        print(f"Error fetching products: {e}")
+        await update.message.reply_text("❌ Không thể tải danh sách sản phẩm. Vui lòng thử lại.")
+
+
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle inline keyboard button callbacks"""
+    query = update.callback_query
+    await query.answer()
+
+    user_id = str(update.effective_user.id)
+    data = query.data
+
+    if data.startswith("customer_"):
+        # Format: customer_{id}_{name}
+        parts = data.split("_", 2)
+        customer_id = int(parts[1])
+        customer_name = parts[2]
+
+        set_user_customer(user_id, customer_id, customer_name)
+
+        await query.edit_message_text(
+            f"✅ Đã chọn khách hàng: **{customer_name}**\n\n"
+            f"Tiếp theo, dùng /set_product để chọn sản phẩm.",
+            parse_mode='Markdown'
+        )
+
+    elif data.startswith("product_"):
+        # Format: product_{id}_{code}_{name}
+        parts = data.split("_", 3)
+        product_id = int(parts[1])
+        product_code = parts[2]
+        product_name = parts[3]
+
+        try:
+            set_user_product(user_id, product_id, product_name, product_code)
+
+            user_context = get_user_context(user_id)
+            await query.edit_message_text(
+                f"✅ Đã thiết lập context:\n\n"
+                f"🏢 Khách hàng: **{user_context['customer_name']}**\n"
+                f"📦 Sản phẩm: **{product_code} - {product_name}**\n\n"
+                f"Bây giờ bạn có thể gửi ảnh để phân tích! 📸",
+                parse_mode='Markdown'
+            )
+        except ValueError as e:
+            await query.edit_message_text(f"❌ {str(e)}")
+
+
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle photo messages"""
-    print(f"📸 [DEBUG] handle_photo called! User: {update.effective_user.id}")
-    await update.message.reply_text("🔍 Đang phân tích ảnh... Vui lòng đợi.")
+    user_id = str(update.effective_user.id)
+    print(f"📸 [DEBUG] handle_photo called! User: {user_id}")
+
+    # Check if context is set
+    user_context = get_user_context(user_id)
+
+    if not user_context or not user_context.get('customer_id') or not user_context.get('product_id'):
+        await update.message.reply_text(
+            "❌ **Vui lòng thiết lập context trước:**\n\n"
+            "1️⃣ /set_customer - Chọn khách hàng\n"
+            "2️⃣ /set_product - Chọn sản phẩm\n\n"
+            "Sau đó gửi lại ảnh để phân tích.",
+            parse_mode='Markdown'
+        )
+        return
+
+    await update.message.reply_text(
+        f"🔍 Đang phân tích ảnh cho:\n"
+        f"🏢 {user_context['customer_name']}\n"
+        f"📦 {user_context['product_code']} - {user_context['product_name']}\n\n"
+        f"Vui lòng đợi..."
+    )
 
     try:
         # Get the largest photo
@@ -134,7 +304,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Download photo
         photo_bytes = await photo_file.download_as_bytearray()
 
-        # Send to API for matching
+        # Send to API for matching with context
         # Timeout config for first-time CLIP model loading (can take 5-7 minutes)
         timeout = httpx.Timeout(
             timeout=600.0,    # Total timeout: 10 minutes
@@ -149,7 +319,11 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         async with httpx.AsyncClient(timeout=timeout) as client:
             files = {"image": ("image.jpg", bytes(photo_bytes), "image/jpeg")}
-            data = {"user_id": str(update.effective_user.id)}
+            data = {
+                "user_id": user_id,
+                "customer_id": str(user_context['customer_id']),
+                "product_id": str(user_context['product_id'])
+            }
             response = await client.post(
                 f"{API_BASE_URL}/api/defects/match",
                 files=files,
@@ -263,6 +437,10 @@ def main():
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("report", report_command))
     application.add_handler(CommandHandler("history", history_command))
+    application.add_handler(CommandHandler("context", context_command))
+    application.add_handler(CommandHandler("set_customer", set_customer_command))
+    application.add_handler(CommandHandler("set_product", set_product_command))
+    application.add_handler(CallbackQueryHandler(button_callback))
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 

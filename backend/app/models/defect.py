@@ -1,6 +1,7 @@
 """Defect models"""
-from sqlalchemy import Column, String, Float, DateTime, Text, ForeignKey, ARRAY
+from sqlalchemy import Column, String, Float, DateTime, Text, ForeignKey, ARRAY, Integer
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 from pgvector.sqlalchemy import Vector
 from datetime import datetime
 import uuid
@@ -12,9 +13,16 @@ class DefectProfile(Base):
     __tablename__ = "defect_profiles"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    # Foreign keys for context-based filtering (QC-standard)
+    customer_id = Column(Integer, ForeignKey("customers.id", ondelete="RESTRICT"), nullable=True, index=True)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="RESTRICT"), nullable=True, index=True)
+
+    # Legacy text fields (kept for backward compatibility and display)
     customer = Column(String(100), nullable=False, index=True)  # e.g., "FAPV"
     part_code = Column(String(50), nullable=False, index=True)  # e.g., "GD3346"
     part_name = Column(String(100), nullable=False)  # e.g., "Grommet"
+
     defect_type = Column(String(50), nullable=False, index=True)  # can, rach, nhan, phong, ok
     defect_title = Column(String(200), nullable=False)  # e.g., "Cấn"
     defect_description = Column(Text, nullable=False)  # Full QC description
@@ -25,6 +33,10 @@ class DefectProfile(Base):
     text_embedding = Column(Vector(512))  # CLIP text embedding
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    customer_rel = relationship("Customer", foreign_keys=[customer_id])
+    product_rel = relationship("Product", foreign_keys=[product_id])
 
 
 class DefectIncident(Base):
