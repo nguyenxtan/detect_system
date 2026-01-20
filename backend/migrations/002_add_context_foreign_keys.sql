@@ -12,18 +12,33 @@ ALTER TABLE defect_profiles
     ADD COLUMN IF NOT EXISTS customer_id INTEGER,
     ADD COLUMN IF NOT EXISTS product_id INTEGER;
 
--- Add foreign key constraints
-ALTER TABLE defect_profiles
-    ADD CONSTRAINT IF NOT EXISTS fk_defect_profiles_customer
-        FOREIGN KEY (customer_id)
-        REFERENCES customers(id)
-        ON DELETE RESTRICT;
+-- Add foreign key constraints (using DO block for idempotency)
+DO $$
+BEGIN
+    -- Add customer foreign key if not exists
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'fk_defect_profiles_customer'
+    ) THEN
+        ALTER TABLE defect_profiles
+            ADD CONSTRAINT fk_defect_profiles_customer
+                FOREIGN KEY (customer_id)
+                REFERENCES customers(id)
+                ON DELETE RESTRICT;
+    END IF;
 
-ALTER TABLE defect_profiles
-    ADD CONSTRAINT IF NOT EXISTS fk_defect_profiles_product
-        FOREIGN KEY (product_id)
-        REFERENCES products(id)
-        ON DELETE RESTRICT;
+    -- Add product foreign key if not exists
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'fk_defect_profiles_product'
+    ) THEN
+        ALTER TABLE defect_profiles
+            ADD CONSTRAINT fk_defect_profiles_product
+                FOREIGN KEY (product_id)
+                REFERENCES products(id)
+                ON DELETE RESTRICT;
+    END IF;
+END $$;
 
 -- Add indexes for efficient filtering
 CREATE INDEX IF NOT EXISTS idx_defect_profiles_customer_id
