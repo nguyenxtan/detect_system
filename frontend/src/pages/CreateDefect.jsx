@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -13,7 +13,7 @@ import {
 } from '@mui/material';
 import { CloudUpload } from '@mui/icons-material';
 import Layout from '../components/layout/Layout';
-import { defectAPI } from '../services/api';
+import { defectAPI, customerAPI, productAPI, defectTypeAPI, severityLevelAPI } from '../services/api';
 
 function CreateDefect() {
   const navigate = useNavigate();
@@ -22,36 +22,75 @@ function CreateDefect() {
   const [success, setSuccess] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
 
+  // Data from database
+  const [customers, setCustomers] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [allProducts, setAllProducts] = useState([]); // Store all products for filtering
+  const [defectTypes, setDefectTypes] = useState([]);
+  const [severityLevels, setSeverityLevels] = useState([]);
+
   const [formData, setFormData] = useState({
-    customer: '',
-    part_code: '',
-    part_name: '',
-    defect_type: 'can',
+    customer_id: '',
+    product_id: '',
+    defect_type: '',
     defect_title: '',
     defect_description: '',
     keywords: '',
-    severity: 'minor',
+    severity: '',
   });
 
-  const defectTypes = [
-    { value: 'can', label: 'Cấn (Dents)' },
-    { value: 'rach', label: 'Rách (Tears)' },
-    { value: 'nhan', label: 'Nhăn (Wrinkles)' },
-    { value: 'phong', label: 'Phồng (Bubbles)' },
-    { value: 'ok', label: 'OK (No Defect)' },
-  ];
+  // Fetch data from APIs
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [customersRes, productsRes, defectTypesRes, severityLevelsRes] = await Promise.all([
+          customerAPI.getAll(),
+          productAPI.getAll(),
+          defectTypeAPI.getAll(),
+          severityLevelAPI.getAll(),
+        ]);
 
-  const severityLevels = [
-    { value: 'minor', label: 'Nhỏ (Minor)' },
-    { value: 'major', label: 'Nghiêm Trọng (Major)' },
-    { value: 'critical', label: 'Rất Nghiêm Trọng (Critical)' },
-  ];
+        setCustomers(customersRes.data);
+        setAllProducts(productsRes.data);
+        setProducts(productsRes.data);
+        setDefectTypes(defectTypesRes.data);
+        setSeverityLevels(severityLevelsRes.data);
+
+        // Set default values if available
+        if (defectTypesRes.data.length > 0) {
+          setFormData((prev) => ({ ...prev, defect_type: defectTypesRes.data[0].defect_code }));
+        }
+        if (severityLevelsRes.data.length > 0) {
+          setFormData((prev) => ({ ...prev, severity: severityLevelsRes.data[0].severity_code }));
+        }
+      } catch (err) {
+        console.error('Error fetching data:', err);
+        setError('Không thể tải dữ liệu. Vui lòng refresh trang.');
+      }
+    };
+
+    fetchData();
+  }, []);
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    const { name, value } = e.target;
+
+    // Filter products when customer changes
+    if (name === 'customer_id') {
+      const filtered = allProducts.filter((p) => p.customer_id === parseInt(value));
+      setProducts(filtered);
+      // Reset product selection when customer changes
+      setFormData({
+        ...formData,
+        [name]: value,
+        product_id: '',
+      });
+    } else {
+      setFormData({
+        ...formData,
+        [name]: value,
+      });
+    }
   };
 
   const handleFileChange = (e) => {
@@ -65,12 +104,33 @@ function CreateDefect() {
     setLoading(true);
 
     try {
+      // Find selected customer and product
+      const selectedCustomer = customers.find((c) => c.id === parseInt(formData.customer_id));
+      const selectedProduct = allProducts.find((p) => p.id === parseInt(formData.product_id));
+
+      if (!selectedCustomer) {
+        setError('Vui lòng chọn khách hàng');
+        setLoading(false);
+        return;
+      }
+
+      if (!selectedProduct) {
+        setError('Vui lòng chọn sản phẩm');
+        setLoading(false);
+        return;
+      }
+
       const formDataToSend = new FormData();
 
-      // Append text fields
-      Object.keys(formData).forEach((key) => {
-        formDataToSend.append(key, formData[key]);
-      });
+      // Map to backend expected fields
+      formDataToSend.append('customer', selectedCustomer.customer_name);
+      formDataToSend.append('part_code', selectedProduct.product_code);
+      formDataToSend.append('part_name', selectedProduct.product_name);
+      formDataToSend.append('defect_type', formData.defect_type);
+      formDataToSend.append('defect_title', formData.defect_title);
+      formDataToSend.append('defect_description', formData.defect_description);
+      formDataToSend.append('keywords', formData.keywords);
+      formDataToSend.append('severity', formData.severity);
 
       // Append images
       selectedFiles.forEach((file) => {
@@ -121,36 +181,44 @@ function CreateDefect() {
               <TextField
                 required
                 fullWidth
+                select
                 label="Khách Hàng"
-                name="customer"
-                value={formData.customer}
+                name="customer_id"
+                value={formData.customer_id}
                 onChange={handleChange}
-                placeholder="VD: FAPV"
-              />
+              >
+                <MenuItem value="">
+                  <em>-- Chọn khách hàng --</em>
+                </MenuItem>
+                {customers.map((customer) => (
+                  <MenuItem key={customer.id} value={customer.id}>
+                    {customer.customer_name} ({customer.customer_code})
+                  </MenuItem>
+                ))}
+              </TextField>
             </Grid>
 
             <Grid item xs={12} md={6}>
               <TextField
                 required
                 fullWidth
-                label="Mã Sản Phẩm"
-                name="part_code"
-                value={formData.part_code}
+                select
+                label="Sản Phẩm"
+                name="product_id"
+                value={formData.product_id}
                 onChange={handleChange}
-                placeholder="VD: GD3346"
-              />
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <TextField
-                required
-                fullWidth
-                label="Tên Sản Phẩm"
-                name="part_name"
-                value={formData.part_name}
-                onChange={handleChange}
-                placeholder="VD: Grommet"
-              />
+                disabled={!formData.customer_id}
+                helperText={!formData.customer_id ? 'Vui lòng chọn khách hàng trước' : ''}
+              >
+                <MenuItem value="">
+                  <em>-- Chọn sản phẩm --</em>
+                </MenuItem>
+                {products.map((product) => (
+                  <MenuItem key={product.id} value={product.id}>
+                    {product.product_name} ({product.product_code})
+                  </MenuItem>
+                ))}
+              </TextField>
             </Grid>
 
             <Grid item xs={12} md={6}>
@@ -163,9 +231,12 @@ function CreateDefect() {
                 value={formData.defect_type}
                 onChange={handleChange}
               >
-                {defectTypes.map((option) => (
-                  <MenuItem key={option.value} value={option.value}>
-                    {option.label}
+                <MenuItem value="">
+                  <em>-- Chọn loại lỗi --</em>
+                </MenuItem>
+                {defectTypes.map((type) => (
+                  <MenuItem key={type.id} value={type.defect_code}>
+                    {type.display_name}
                   </MenuItem>
                 ))}
               </TextField>
@@ -193,9 +264,12 @@ function CreateDefect() {
                 value={formData.severity}
                 onChange={handleChange}
               >
-                {severityLevels.map((option) => (
-                  <MenuItem key={option.value} value={option.value}>
-                    {option.label}
+                <MenuItem value="">
+                  <em>-- Chọn mức độ --</em>
+                </MenuItem>
+                {severityLevels.map((level) => (
+                  <MenuItem key={level.id} value={level.severity_code}>
+                    {level.display_name}
                   </MenuItem>
                 ))}
               </TextField>
