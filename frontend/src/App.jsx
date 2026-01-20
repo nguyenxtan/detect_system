@@ -12,6 +12,10 @@ import DefectList from './pages/DefectList';
 import CreateDefect from './pages/CreateDefect';
 import UserManagement from './pages/UserManagement';
 import Incidents from './pages/Incidents';
+import CustomerManagement from './pages/CustomerManagement';
+import ProductManagement from './pages/ProductManagement';
+import DefectTypeManagement from './pages/DefectTypeManagement';
+import SeverityLevelManagement from './pages/SeverityLevelManagement';
 
 // Utils
 import { isAuthenticated } from './utils/auth';
@@ -124,6 +128,38 @@ function App() {
             element={
               <ProtectedRoute>
                 <Incidents />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/customers"
+            element={
+              <ProtectedRoute>
+                <CustomerManagement />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/products"
+            element={
+              <ProtectedRoute>
+                <ProductManagement />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/defect-types"
+            element={
+              <ProtectedRoute>
+                <DefectTypeManagement />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/severity-levels"
+            element={
+              <ProtectedRoute>
+                <SeverityLevelManagement />
               </ProtectedRoute>
             }
           />

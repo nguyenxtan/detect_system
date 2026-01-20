@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 import os
 from .core.config import settings
 from .core.database import engine, Base
-from .api.endpoints import auth, defects, users
+from .api.endpoints import auth, defects, users, customers, products, defect_types, severity_levels
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -35,10 +35,14 @@ os.makedirs(settings.REFERENCE_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 app.mount("/references", StaticFiles(directory=settings.REFERENCE_DIR), name="references")
 
-# Include routers
-app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
-app.include_router(defects.router, prefix="/defects", tags=["Defects"])
-app.include_router(users.router, prefix="/users", tags=["Users"])
+# Include routers with /api prefix
+app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(defects.router, prefix="/api/defects", tags=["Defects"])
+app.include_router(users.router, prefix="/api/users", tags=["Users"])
+app.include_router(customers.router, prefix="/api/customers", tags=["Customers"])
+app.include_router(products.router, prefix="/api/products", tags=["Products"])
+app.include_router(defect_types.router, prefix="/api/defect-types", tags=["Defect Types"])
+app.include_router(severity_levels.router, prefix="/api/severity-levels", tags=["Severity Levels"])
 
 
 @app.get("/")

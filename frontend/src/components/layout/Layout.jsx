@@ -28,6 +28,10 @@ import {
   Logout as LogoutIcon,
   Settings as SettingsIcon,
   ChevronLeft as ChevronLeftIcon,
+  Business as BusinessIcon,
+  Inventory as InventoryIcon,
+  Category as CategoryIcon,
+  PriorityHigh as PriorityIcon,
 } from '@mui/icons-material';
 import { removeAuthToken, getUser, isAdmin } from '../../utils/auth';
 
@@ -92,6 +96,30 @@ function Layout({ children }) {
       title: 'Quản Lý User',
       path: '/users',
       icon: <PeopleIcon />,
+      adminOnly: true,
+    },
+    {
+      title: 'Khách Hàng',
+      path: '/customers',
+      icon: <BusinessIcon />,
+      adminOnly: true,
+    },
+    {
+      title: 'Sản Phẩm',
+      path: '/products',
+      icon: <InventoryIcon />,
+      adminOnly: true,
+    },
+    {
+      title: 'Loại Lỗi',
+      path: '/defect-types',
+      icon: <CategoryIcon />,
+      adminOnly: true,
+    },
+    {
+      title: 'Mức Độ',
+      path: '/severity-levels',
+      icon: <PriorityIcon />,
       adminOnly: true,
     },
   ];
