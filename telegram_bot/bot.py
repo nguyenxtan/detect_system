@@ -36,18 +36,18 @@ Xin chào! Tôi là trợ lý AI giúp bạn nhận dạng lỗi sản phẩm.
 **Các lệnh:**
 /start - Bắt đầu
 /ping - Kiểm tra kết nối
-/set_product - Chọn sản phẩm (BẮT BUỘC)
-/set_customer - Chọn khách hàng (tùy chọn, để lọc sản phẩm)
+/setproduct - Chọn sản phẩm (BẮT BUỘC)
+/setcustomer - Chọn khách hàng (tùy chọn, để lọc sản phẩm)
 /context - Xem context hiện tại
 /history - Xem lịch sử 10 báo cáo gần nhất
 /help - Hướng dẫn sử dụng
 
 **Cách sử dụng:**
-1. Chọn sản phẩm: /set_product
+1. Chọn sản phẩm: /setproduct
 2. Gửi ảnh lỗi sản phẩm
 3. Bot phân tích và trả về kết quả
 
-Dùng /set_product để bắt đầu! 📸
+Dùng /setproduct để bắt đầu! 📸
     """
     await update.message.reply_text(welcome_message, parse_mode='Markdown')
 
@@ -146,7 +146,7 @@ async def set_customer_command(update: Update, context: ContextTypes.DEFAULT_TYP
 
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"{API_BASE_URL}/api/customers")
+            response = await client.get(f"{API_BASE_URL}/api/customers/")
 
         if response.status_code == 200:
             customers = response.json()
@@ -188,7 +188,7 @@ async def set_product_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"{API_BASE_URL}/api/products")
+            response = await client.get(f"{API_BASE_URL}/api/products/")
 
         if response.status_code == 200:
             all_products = response.json()
@@ -201,7 +201,7 @@ async def set_product_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             else:
                 # Show all products (or top N to avoid overwhelming)
                 products = all_products[:50]  # Limit to 50 for UX
-                header_msg = "📦 **Chọn sản phẩm:**\n_Tip: Dùng /set_customer trước để lọc theo khách hàng_"
+                header_msg = "📦 **Chọn sản phẩm:**\n_Tip: Dùng /setcustomer trước để lọc theo khách hàng_"
 
             if not products:
                 await update.message.reply_text(
@@ -260,7 +260,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await query.edit_message_text(
             f"✅ Đã chọn khách hàng: **{customer_name}**\n\n"
-            f"Tiếp theo, dùng /set_product để chọn sản phẩm.",
+            f"Tiếp theo, dùng /setproduct để chọn sản phẩm.",
             parse_mode='Markdown'
         )
 
@@ -314,8 +314,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not user_context or not user_context.get('product_id'):
         await update.message.reply_text(
             "❌ **Vui lòng chọn sản phẩm trước:**\n\n"
-            "/set_product - Chọn sản phẩm\n\n"
-            "_Tip: Dùng /set_customer trước để lọc sản phẩm theo khách hàng_\n\n"
+            "/setproduct - Chọn sản phẩm\n\n"
+            "_Tip: Dùng /setcustomer trước để lọc sản phẩm theo khách hàng_\n\n"
             "Sau đó gửi lại ảnh để phân tích.",
             parse_mode='Markdown'
         )
@@ -512,8 +512,10 @@ def main():
     application.add_handler(CommandHandler("report", report_command))
     application.add_handler(CommandHandler("history", history_command))
     application.add_handler(CommandHandler("context", context_command))
-    application.add_handler(CommandHandler("set_customer", set_customer_command))
-    application.add_handler(CommandHandler("set_product", set_product_command))
+    application.add_handler(CommandHandler("setcustomer", set_customer_command))
+    application.add_handler(CommandHandler("set_customer", set_customer_command))  # Backward compat
+    application.add_handler(CommandHandler("setproduct", set_product_command))
+    application.add_handler(CommandHandler("set_product", set_product_command))  # Backward compat
     application.add_handler(CallbackQueryHandler(button_callback))
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
