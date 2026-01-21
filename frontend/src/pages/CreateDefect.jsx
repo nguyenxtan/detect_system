@@ -367,8 +367,11 @@ function CreateDefect() {
                 component="label"
                 startIcon={<CloudUpload />}
                 fullWidth
+                color={formData.defect_type === 'OK' ? 'success' : 'primary'}
               >
-                Upload Ảnh Tham Khảo (Tối Thiểu 1 Ảnh)
+                {formData.defect_type === 'OK'
+                  ? '✅ Upload Ảnh Sản Phẩm BÌNH THƯỜNG (Tối Thiểu 3 Ảnh)'
+                  : 'Upload Ảnh Tham Khảo Lỗi (Tối Thiểu 3 Ảnh)'}
                 <input
                   type="file"
                   hidden
@@ -379,9 +382,20 @@ function CreateDefect() {
                 />
               </Button>
               {selectedFiles.length > 0 && (
-                <Typography variant="body2" sx={{ mt: 1 }}>
-                  Đã chọn {selectedFiles.length} ảnh
+                <Typography variant="body2" sx={{ mt: 1, color: selectedFiles.length < 3 ? 'warning.main' : 'success.main' }}>
+                  Đã chọn {selectedFiles.length} ảnh {selectedFiles.length < 3 ? '⚠️ (Khuyến nghị tối thiểu 3 ảnh)' : '✓'}
                 </Typography>
+              )}
+              {formData.defect_type === 'OK' && (
+                <Alert severity="info" sx={{ mt: 2 }}>
+                  <strong>Hướng dẫn upload ảnh OK/No Defect:</strong>
+                  <ul style={{ marginTop: '8px', marginBottom: 0 }}>
+                    <li>Upload ảnh sản phẩm KHÔNG CÓ LỖI, hoàn toàn bình thường</li>
+                    <li>Tối thiểu 3 ảnh từ các góc độ khác nhau</li>
+                    <li>Ảnh rõ nét, đủ ánh sáng, đúng sản phẩm</li>
+                    <li>Hệ thống sẽ học cách nhận biết sản phẩm OK</li>
+                  </ul>
+                </Alert>
               )}
             </Grid>
 

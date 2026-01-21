@@ -173,6 +173,102 @@ def get_defect_profile(
     return profile
 
 
+@router.delete("/profiles/{profile_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_defect_profile(
+    profile_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """Delete a defect profile (Admin only)"""
+    profile = db.query(DefectProfile).filter(DefectProfile.id == profile_id).first()
+
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Defect profile not found"
+        )
+
+    # Delete reference images from disk
+    if profile.reference_images:
+        for img_path in profile.reference_images:
+            try:
+                # Convert URL path to file path
+                if img_path.startswith('/references/'):
+                    filename = os.path.basename(img_path)
+                    file_path = os.path.join(settings.REFERENCE_DIR, filename)
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                        logger.info(f"Deleted reference image: {file_path}")
+            except Exception as e:
+                logger.error(f"Failed to delete image {img_path}: {e}")
+                # Continue even if image deletion fails
+
+    db.delete(profile)
+    db.commit()
+    return None
+
+
+@router.put("/profiles/{profile_id}/images", response_model=DefectProfileResponse)
+async def add_profile_images(
+    profile_id: uuid.UUID,
+    reference_images: List[UploadFile] = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """Add more reference images to an existing defect profile (Admin only)"""
+    profile = db.query(DefectProfile).filter(DefectProfile.id == profile_id).first()
+
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Defect profile not found"
+        )
+
+    # Get embedding service
+    embedding_service = get_embedding_service()
+
+    # Save new reference images and generate embeddings
+    new_image_urls = []
+    new_image_embeddings = []
+
+    os.makedirs(settings.REFERENCE_DIR, exist_ok=True)
+
+    for image_file in reference_images:
+        # Generate unique filename
+        file_ext = os.path.splitext(image_file.filename)[1]
+        filename = f"{uuid.uuid4()}{file_ext}"
+        filepath = os.path.join(settings.REFERENCE_DIR, filename)
+
+        # Save file
+        async with aiofiles.open(filepath, 'wb') as f:
+            content = await image_file.read()
+            await f.write(content)
+
+        # Store URL path
+        new_image_urls.append(f"/references/{filename}")
+
+        # Generate embedding
+        embedding = embedding_service.get_image_embedding(content)
+        new_image_embeddings.append(embedding)
+
+    # Combine old and new embeddings
+    import numpy as np
+    old_embeddings = [profile.image_embedding] if profile.image_embedding else []
+    all_embeddings = old_embeddings + new_image_embeddings
+
+    # Compute new average embedding
+    avg_image_embedding = np.mean(all_embeddings, axis=0)
+
+    # Update profile
+    profile.reference_images = (profile.reference_images or []) + new_image_urls
+    profile.image_embedding = avg_image_embedding.tolist()
+
+    db.commit()
+    db.refresh(profile)
+
+    return profile
+
+
 @router.post("/match", response_model=DefectMatchResult)
 async def match_defect(
     image: UploadFile = File(...),

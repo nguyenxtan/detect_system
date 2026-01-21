@@ -60,6 +60,14 @@ export const defectAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
 
+  deleteProfile: (id) =>
+    api.delete(`/api/defects/profiles/${id}`),
+
+  addImages: (id, formData) =>
+    api.put(`/api/defects/profiles/${id}/images`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+
   matchDefect: (formData) =>
     api.post('/api/defects/match', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },

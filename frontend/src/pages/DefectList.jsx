@@ -16,10 +16,18 @@ import {
   ImageListItem,
   Dialog,
   DialogContent,
+  DialogTitle,
+  DialogActions,
   IconButton,
+  Button,
+  Menu,
+  MenuItem,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import BrokenImageIcon from '@mui/icons-material/BrokenImage';
+import DeleteIcon from '@mui/icons-material/Delete';
+import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import Layout from '../components/layout/Layout';
 import { defectAPI } from '../services/api';
 
@@ -30,6 +38,12 @@ function DefectList() {
   const [selectedImage, setSelectedImage] = useState(null);
   const [openImageDialog, setOpenImageDialog] = useState(false);
   const [failedImages, setFailedImages] = useState(new Set());
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [selectedDefect, setSelectedDefect] = useState(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [addImagesDialogOpen, setAddImagesDialogOpen] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     fetchDefects();
@@ -93,6 +107,77 @@ function DefectList() {
     setFailedImages(prev => new Set([...prev, imageUrl]));
   };
 
+  const handleMenuOpen = (event, defect) => {
+    setAnchorEl(event.currentTarget);
+    setSelectedDefect(defect);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+    setSelectedDefect(null);
+  };
+
+  const handleDeleteClick = () => {
+    handleMenuClose();
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!selectedDefect) return;
+
+    setActionLoading(true);
+    try {
+      await defectAPI.deleteProfile(selectedDefect.id);
+      setDefects(defects.filter(d => d.id !== selectedDefect.id));
+      setDeleteDialogOpen(false);
+      setSelectedDefect(null);
+    } catch (err) {
+      console.error('Error deleting profile:', err);
+      setError('Không thể xóa profile. Vui lòng thử lại.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleAddImagesClick = () => {
+    handleMenuClose();
+    setAddImagesDialogOpen(true);
+    setSelectedFiles([]);
+  };
+
+  const handleFileChange = (event) => {
+    setSelectedFiles(Array.from(event.target.files));
+  };
+
+  const handleAddImagesSubmit = async () => {
+    if (!selectedDefect || selectedFiles.length === 0) return;
+
+    setActionLoading(true);
+    try {
+      const formData = new FormData();
+      selectedFiles.forEach((file) => {
+        formData.append('reference_images', file);
+      });
+
+      const response = await defectAPI.addImages(selectedDefect.id, formData);
+
+      // Update defect in list
+      setDefects(defects.map(d => d.id === selectedDefect.id ? response.data : d));
+
+      setAddImagesDialogOpen(false);
+      setSelectedDefect(null);
+      setSelectedFiles([]);
+
+      // Refresh to show new images
+      await fetchDefects();
+    } catch (err) {
+      console.error('Error adding images:', err);
+      setError('Không thể thêm ảnh. Vui lòng thử lại.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
   return (
@@ -128,12 +213,13 @@ function DefectList() {
                 <TableCell><strong>Mức Độ</strong></TableCell>
                 <TableCell><strong>Keywords</strong></TableCell>
                 <TableCell><strong>Hình Ảnh Tham Khảo</strong></TableCell>
+                <TableCell align="center"><strong>Thao Tác</strong></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {defects.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center">
+                  <TableCell colSpan={9} align="center">
                     <Typography variant="body2" color="textSecondary">
                       Chưa có defect profile nào
                     </Typography>
@@ -217,6 +303,14 @@ function DefectList() {
                         </Typography>
                       )}
                     </TableCell>
+                    <TableCell align="center">
+                      <IconButton
+                        size="small"
+                        onClick={(e) => handleMenuOpen(e, defect)}
+                      >
+                        <MoreVertIcon />
+                      </IconButton>
+                    </TableCell>
                   </TableRow>
                 ))
               )}
@@ -261,6 +355,103 @@ function DefectList() {
             />
           )}
         </DialogContent>
+      </Dialog>
+
+      {/* Actions Menu */}
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={handleMenuClose}
+      >
+        <MenuItem onClick={handleAddImagesClick}>
+          <AddPhotoAlternateIcon sx={{ mr: 1 }} fontSize="small" />
+          Thêm Ảnh
+        </MenuItem>
+        <MenuItem onClick={handleDeleteClick} sx={{ color: 'error.main' }}>
+          <DeleteIcon sx={{ mr: 1 }} fontSize="small" />
+          Xóa Profile
+        </MenuItem>
+      </Menu>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onClose={() => !actionLoading && setDeleteDialogOpen(false)}>
+        <DialogTitle>Xác Nhận Xóa</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Bạn có chắc muốn xóa profile <strong>{selectedDefect?.defect_title}</strong>?
+          </Typography>
+          <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+            Hành động này không thể hoàn tác. Tất cả ảnh tham khảo sẽ bị xóa.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)} disabled={actionLoading}>
+            Hủy
+          </Button>
+          <Button
+            onClick={handleDeleteConfirm}
+            color="error"
+            variant="contained"
+            disabled={actionLoading}
+            startIcon={actionLoading && <CircularProgress size={16} />}
+          >
+            {actionLoading ? 'Đang xóa...' : 'Xóa'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Add Images Dialog */}
+      <Dialog
+        open={addImagesDialogOpen}
+        onClose={() => !actionLoading && setAddImagesDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Thêm Ảnh Tham Khảo</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" gutterBottom>
+            Profile: <strong>{selectedDefect?.defect_title}</strong>
+          </Typography>
+          <Typography variant="body2" color="textSecondary" gutterBottom>
+            Hiện có {selectedDefect?.reference_images?.length || 0} ảnh
+          </Typography>
+          <Box sx={{ mt: 2 }}>
+            <Button
+              variant="outlined"
+              component="label"
+              fullWidth
+              startIcon={<AddPhotoAlternateIcon />}
+            >
+              Chọn Ảnh Để Thêm
+              <input
+                type="file"
+                hidden
+                multiple
+                accept="image/*"
+                onChange={handleFileChange}
+              />
+            </Button>
+            {selectedFiles.length > 0 && (
+              <Typography variant="body2" sx={{ mt: 1 }} color="success.main">
+                ✓ Đã chọn {selectedFiles.length} ảnh mới
+              </Typography>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAddImagesDialogOpen(false)} disabled={actionLoading}>
+            Hủy
+          </Button>
+          <Button
+            onClick={handleAddImagesSubmit}
+            color="primary"
+            variant="contained"
+            disabled={actionLoading || selectedFiles.length === 0}
+            startIcon={actionLoading && <CircularProgress size={16} />}
+          >
+            {actionLoading ? 'Đang thêm...' : 'Thêm Ảnh'}
+          </Button>
+        </DialogActions>
       </Dialog>
     </Layout>
   );
