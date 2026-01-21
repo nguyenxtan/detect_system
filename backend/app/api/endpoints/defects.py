@@ -73,6 +73,44 @@ async def create_defect_profile(
         # Derive customer_id from product
         customer_id = product.customer_id
 
+    # Validate images
+    MAX_IMAGES = 20  # Maximum number of images per profile
+    MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10MB per image
+
+    if len(reference_images) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one reference image is required"
+        )
+
+    if len(reference_images) > MAX_IMAGES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many images. Maximum {MAX_IMAGES} images allowed per profile."
+        )
+
+    # Check individual file sizes
+    for i, image_file in enumerate(reference_images):
+        # Read file size by seeking
+        await image_file.seek(0, 2)  # Seek to end
+        file_size = await image_file.tell()
+        await image_file.seek(0)  # Reset to beginning
+
+        if file_size > MAX_IMAGE_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Image {i+1} ({image_file.filename}) is too large. Maximum size is {MAX_IMAGE_SIZE // (1024*1024)}MB per image."
+            )
+
+        # Validate file type
+        if image_file.content_type and not image_file.content_type.startswith('image/'):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File {image_file.filename} is not a valid image"
+            )
+
+    logger.info(f"Creating defect profile with {len(reference_images)} images")
+
     # Get embedding service
     embedding_service = get_embedding_service()
 
@@ -143,16 +181,25 @@ def get_defect_profiles(
     current_user: User = Depends(get_current_user)
 ):
     """Get all defect profiles"""
-    query = db.query(DefectProfile)
+    try:
+        logger.info(f"User {current_user.username} fetching defect profiles (skip={skip}, limit={limit})")
+        query = db.query(DefectProfile)
 
-    if defect_type:
-        query = query.filter(DefectProfile.defect_type == defect_type)
+        if defect_type:
+            query = query.filter(DefectProfile.defect_type == defect_type)
 
-    if customer:
-        query = query.filter(DefectProfile.customer == customer)
+        if customer:
+            query = query.filter(DefectProfile.customer == customer)
 
-    profiles = query.offset(skip).limit(limit).all()
-    return profiles
+        profiles = query.offset(skip).limit(limit).all()
+        logger.info(f"Returning {len(profiles)} defect profiles")
+        return profiles
+    except Exception as e:
+        logger.error(f"Error fetching defect profiles: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch defect profiles. Please check logs for details."
+        )
 
 
 @router.get("/profiles/{profile_id}", response_model=DefectProfileResponse)
