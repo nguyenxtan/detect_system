@@ -251,22 +251,75 @@ async def match_defect(
             'profile': p
         })
 
-    # Find best match
-    best_match, confidence = embedding_service.find_best_match(
+    # Find top-K matches (default K=3 for margin rule and debugging)
+    top_k_matches = embedding_service.find_top_k_matches(
         image_embedding,
         text_query or "",
-        profile_dicts
+        profile_dicts,
+        k=settings.TOP_K_RESULTS
     )
 
-    # If confidence is too low, return 200 with null match and warning
-    # (Instead of 404, which is semantically incorrect)
-    if confidence < settings.SIMILARITY_THRESHOLD:
+    if not top_k_matches:
         return DefectMatchResult(
+            outcome="UNKNOWN",
             defect_profile=None,
-            confidence=confidence,
+            confidence=0.0,
             similarity_breakdown=None,
-            warning=f"No confident match found. Confidence {confidence:.2%} is below threshold {settings.SIMILARITY_THRESHOLD:.2%}. Please improve image quality or add more defect profiles."
+            warning="No defect profiles found to match against",
+            top_k=[]
         )
+
+    # Get top match
+    best_match = top_k_matches[0]
+    confidence = best_match['score']
+    best_profile = best_match['profile']['profile']
+
+    # Determine outcome based on thresholds and margin rule
+    outcome = "UNKNOWN"
+    warning = None
+
+    # Check 1: Confidence too low
+    if confidence < settings.SIMILARITY_THRESHOLD:
+        outcome = "UNKNOWN"
+        warning = f"Confidence {confidence:.2%} is below threshold {settings.SIMILARITY_THRESHOLD:.2%}. Please improve image quality or add more defect profiles."
+    # Check 2: Margin rule - if top1 and top2 are too close, result is ambiguous
+    elif len(top_k_matches) > 1:
+        margin = top_k_matches[0]['score'] - top_k_matches[1]['score']
+        if margin < settings.MARGIN_THRESHOLD:
+            outcome = "UNKNOWN"
+            second_profile = top_k_matches[1]['profile']['profile']
+            warning = f"Ambiguous result: top matches are too close (margin={margin:.3f} < {settings.MARGIN_THRESHOLD}). Top 2: {best_profile.defect_type} vs {second_profile.defect_type}."
+        # Check 3: Is best match an OK profile?
+        elif best_profile.defect_type.upper() == 'OK':
+            if confidence >= settings.OK_THRESHOLD:
+                outcome = "OK"
+            else:
+                outcome = "UNKNOWN"
+                warning = f"OK profile matched but confidence {confidence:.2%} is below OK threshold {settings.OK_THRESHOLD:.2%}."
+        # Check 4: Regular defect match
+        else:
+            outcome = "DEFECT"
+    # Only one profile exists - check if OK or DEFECT
+    elif best_profile.defect_type.upper() == 'OK':
+        if confidence >= settings.OK_THRESHOLD:
+            outcome = "OK"
+        else:
+            outcome = "UNKNOWN"
+            warning = f"OK profile matched but confidence {confidence:.2%} is below OK threshold {settings.OK_THRESHOLD:.2%}."
+    else:
+        outcome = "DEFECT"
+
+    # Build top_k response for debugging
+    from ...schemas.defect import TopKMatch
+    top_k_response = []
+    for i, match in enumerate(top_k_matches):
+        top_k_response.append(TopKMatch(
+            defect_profile=DefectProfileResponse.model_validate(match['profile']['profile']),
+            confidence=match['score'],
+            rank=i+1
+        ))
+
+    print(f"[MATCHING] Final outcome: {outcome}, confidence: {confidence:.2%}")
 
     # Save uploaded image to disk
     uploaded_image_path = None
@@ -292,13 +345,13 @@ async def match_defect(
             logger.error(f"Failed to save uploaded image: {e}")
             # Continue even if image save fails
 
-    # Create DefectIncident record if user_id provided
-    if user_id and uploaded_image_path:
+    # Create DefectIncident record if user_id provided (only for DEFECT outcomes)
+    if user_id and uploaded_image_path and outcome in ("DEFECT", "OK"):
         try:
             incident = DefectIncident(
                 user_id=user_id,
-                defect_profile_id=best_match['profile'].id,
-                predicted_defect_type=best_match['profile'].defect_type,
+                defect_profile_id=best_profile.id,
+                predicted_defect_type=best_profile.defect_type,
                 confidence=confidence,
                 image_url=uploaded_image_path,
                 image_embedding=image_embedding.tolist() if hasattr(image_embedding, 'tolist') else list(image_embedding),
@@ -307,21 +360,38 @@ async def match_defect(
             )
             db.add(incident)
             db.commit()
-            logger.info(f"Created DefectIncident for user {user_id}")
+            logger.info(f"Created DefectIncident for user {user_id}, outcome={outcome}")
 
         except Exception as e:
             logger.error(f"Failed to create DefectIncident: {e}")
             db.rollback()
             # Continue even if incident creation fails
 
-    return DefectMatchResult(
-        defect_profile=DefectProfileResponse.model_validate(best_match['profile']),
-        confidence=confidence,
-        similarity_breakdown={
-            "image_weight": settings.IMAGE_WEIGHT,
-            "text_weight": settings.TEXT_WEIGHT
-        }
-    )
+    # Return result based on outcome
+    if outcome == "UNKNOWN":
+        return DefectMatchResult(
+            outcome="UNKNOWN",
+            defect_profile=None,
+            confidence=confidence,
+            similarity_breakdown={
+                "image_weight": settings.IMAGE_WEIGHT,
+                "text_weight": settings.TEXT_WEIGHT
+            },
+            warning=warning,
+            top_k=top_k_response
+        )
+    else:
+        return DefectMatchResult(
+            outcome=outcome,
+            defect_profile=DefectProfileResponse.model_validate(best_profile),
+            confidence=confidence,
+            similarity_breakdown={
+                "image_weight": settings.IMAGE_WEIGHT,
+                "text_weight": settings.TEXT_WEIGHT
+            },
+            warning=warning,
+            top_k=top_k_response
+        )
 
 
 @router.post("/inspect")

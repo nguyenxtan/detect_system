@@ -107,28 +107,30 @@ class EmbeddingService:
         similarity = np.dot(embedding1, embedding2)
         return float(similarity)
 
-    def find_best_match(
+    def find_top_k_matches(
         self,
         image_embedding: np.ndarray,
         text_query: str,
-        candidate_profiles: List[dict]
-    ) -> Tuple[dict, float]:
+        candidate_profiles: List[dict],
+        k: int = 3
+    ) -> List[dict]:
         """
-        Find best matching defect profile
+        Find top-K matching defect profiles
 
         Args:
             image_embedding: Image embedding from user
             text_query: Optional text query
             candidate_profiles: List of defect profiles with embeddings
+            k: Number of top matches to return
 
         Returns:
-            Best matching profile and confidence score
+            List of top-K matches with scores, sorted by score (descending)
         """
-        best_match = None
-        best_score = 0.0
+        scored_profiles = []
 
         print(f"\n[MATCHING] Comparing against {len(candidate_profiles)} profiles...")
         print(f"[MATCHING] Weights: IMAGE={settings.IMAGE_WEIGHT}, TEXT={settings.TEXT_WEIGHT}")
+        print(f"[MATCHING] Returning top-{k} matches")
 
         for idx, profile in enumerate(candidate_profiles):
             # Image similarity
@@ -161,14 +163,48 @@ class EmbeddingService:
             print(f"[MATCHING] Profile {idx+1}: {prof_name}")
             print(f"           Image sim: {img_sim:.4f}, Text sim: {text_sim:.4f}, Final: {final_score:.4f}")
 
-            if final_score > best_score:
-                best_score = final_score
-                best_match = profile
+            scored_profiles.append({
+                'profile': profile,
+                'score': final_score,
+                'image_similarity': img_sim,
+                'text_similarity': text_sim
+            })
 
-        print(f"\n[MATCHING] Best score: {best_score:.4f}")
-        print(f"[MATCHING] Threshold: {settings.SIMILARITY_THRESHOLD}")
+        # Sort by score descending and take top-K
+        scored_profiles.sort(key=lambda x: x['score'], reverse=True)
+        top_k = scored_profiles[:k]
 
-        return best_match, best_score
+        print(f"\n[MATCHING] Top-{k} results:")
+        for i, match in enumerate(top_k):
+            prof_obj = match['profile'].get('profile')
+            prof_name = f"{prof_obj.customer}-{prof_obj.part_code}-{prof_obj.defect_type}" if prof_obj else "Unknown"
+            print(f"  {i+1}. {prof_name}: {match['score']:.4f}")
+
+        print(f"[MATCHING] Thresholds: DEFECT={settings.SIMILARITY_THRESHOLD}, OK={settings.OK_THRESHOLD}, MARGIN={settings.MARGIN_THRESHOLD}")
+
+        return top_k
+
+    def find_best_match(
+        self,
+        image_embedding: np.ndarray,
+        text_query: str,
+        candidate_profiles: List[dict]
+    ) -> Tuple[dict, float]:
+        """
+        Find best matching defect profile (legacy method for backward compatibility)
+
+        Args:
+            image_embedding: Image embedding from user
+            text_query: Optional text query
+            candidate_profiles: List of defect profiles with embeddings
+
+        Returns:
+            Best matching profile and confidence score
+        """
+        top_k_matches = self.find_top_k_matches(image_embedding, text_query, candidate_profiles, k=1)
+        if top_k_matches:
+            return top_k_matches[0]['profile'], top_k_matches[0]['score']
+        return None, 0.0
 
 
 # Global instance - will be initialized lazily

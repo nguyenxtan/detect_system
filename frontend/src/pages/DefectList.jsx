@@ -50,6 +50,8 @@ function DefectList() {
 
   const getSeverityColor = (severity) => {
     switch (severity) {
+      case 'NONE':
+        return 'success';
       case 'critical':
         return 'error';
       case 'major':
@@ -63,6 +65,8 @@ function DefectList() {
 
   const getSeverityLabel = (severity) => {
     switch (severity) {
+      case 'NONE':
+        return 'Không có lỗi';
       case 'critical':
         return 'Rất Nghiêm Trọng';
       case 'major':
@@ -142,7 +146,11 @@ function DefectList() {
                     <TableCell>{defect.part_code}</TableCell>
                     <TableCell>{defect.part_name}</TableCell>
                     <TableCell>
-                      <Chip label={defect.defect_type} size="small" />
+                      <Chip
+                        label={defect.defect_type === 'OK' ? '✅ OK' : defect.defect_type}
+                        size="small"
+                        color={defect.defect_type === 'OK' ? 'success' : 'default'}
+                      />
                     </TableCell>
                     <TableCell>{defect.defect_title}</TableCell>
                     <TableCell>

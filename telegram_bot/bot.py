@@ -180,11 +180,25 @@ async def set_customer_command(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def set_product_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /set_product command - show product list (optionally filtered by customer)"""
+    """Handle /set_product command - ALWAYS show full product list for easy switching"""
     user_id = str(update.effective_user.id)
     user_context = get_user_context(user_id)
 
-    await update.message.reply_text("🔄 Đang tải danh sách sản phẩm...")
+    # Check if user explicitly set customer via /setcustomer (not auto-set from product)
+    # We consider customer "explicitly set" if they used /setcustomer command
+    # To enable this, we need a flag, but for simplicity: always show all products
+    # Users can use /setcustomer first if they want filtered view
+
+    current_product = user_context.get('product_code') if user_context else None
+    current_customer = user_context.get('customer_name') if user_context and user_context.get('customer_id') else None
+
+    context_info = ""
+    if current_product:
+        context_info = f"\n\n_Hiện tại: {current_product}_"
+        if current_customer:
+            context_info += f" _({current_customer})_"
+
+    await update.message.reply_text(f"🔄 Đang tải danh sách sản phẩm...{context_info}", parse_mode='Markdown')
 
     try:
         async with httpx.AsyncClient() as client:
@@ -193,15 +207,10 @@ async def set_product_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         if response.status_code == 200:
             all_products = response.json()
 
-            # Filter by customer if set (for better UX), otherwise show all
-            if user_context and user_context.get('customer_id'):
-                customer_id = user_context['customer_id']
-                products = [p for p in all_products if p['customer_id'] == customer_id]
-                header_msg = f"📦 **Chọn sản phẩm của {user_context['customer_name']}:**"
-            else:
-                # Show all products (or top N to avoid overwhelming)
-                products = all_products[:50]  # Limit to 50 for UX
-                header_msg = "📦 **Chọn sản phẩm:**\n_Tip: Dùng /setcustomer trước để lọc theo khách hàng_"
+            # ALWAYS show all products (allow easy switching)
+            # Users can use /setcustomer first if they want filtered view
+            products = all_products[:50]  # Limit to 50 for UX
+            header_msg = "📦 **Chọn sản phẩm:**\n\n_Tip: Dùng /setcustomer trước để lọc theo khách hàng, hoặc chọn trực tiếp từ danh sách_"
 
             if not products:
                 await update.message.reply_text(
@@ -381,46 +390,58 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if response.status_code == 200:
             result = response.json()
+            outcome = result.get('outcome', 'UNKNOWN')
             defect_profile = result.get('defect_profile')
             confidence = result.get('confidence', 0)
             warning = result.get('warning')
 
-            # Handle case where match is null (low confidence)
-            if defect_profile is None:
+            # Build context footer for all responses
+            product_code = user_context.get('product_code', 'N/A')
+            product_name = user_context.get('product_name', 'N/A')
+            customer_name = user_context.get('customer_name', 'Chưa chọn')
+
+            context_footer = f"\n\n📋 _Context: Sản phẩm_ `{product_code}` _- {product_name}_"
+            if user_context.get('customer_id'):
+                context_footer += f" _({customer_name})_"
+
+            # Handle UNKNOWN outcome
+            if outcome == "UNKNOWN":
                 warning_text = f"\n\n_Lý do: {warning}_" if warning else ""
                 await update.message.reply_text(
-                    f"❌ **Không tìm thấy lỗi phù hợp**\n\n"
-                    f"Độ tin cậy: {confidence:.0%} (quá thấp)\n\n"
-                    f"**Vui lòng:**\n"
-                    f"- Chụp ảnh rõ hơn, zoom vào vùng lỗi\n"
-                    f"- Đảm bảo ánh sáng đủ\n"
-                    f"- Chụp từ góc độ rõ ràng hơn\n"
-                    f"- Hoặc liên hệ QC team để thêm loại lỗi mới{warning_text}",
+                    f"❓ **KHÔNG XÁC ĐỊNH ĐƯỢC**\n\n"
+                    f"Hệ thống không thể xác định với độ tin cậy đủ cao.\n"
+                    f"Độ tin cậy: {confidence:.0%}\n\n"
+                    f"**Khuyến nghị:**\n"
+                    f"- Chụp ảnh rõ hơn, zoom vào vùng cần kiểm tra\n"
+                    f"- Đảm bảo ánh sáng đủ và góc chụp rõ ràng\n"
+                    f"- Hoặc liên hệ QC team để xác nhận thủ công{warning_text}{context_footer}",
                     parse_mode='Markdown'
                 )
                 return
 
-            # Normal case: defect found
-            defect_type = defect_profile['defect_type'].lower()
-
-            # Format response differently for OK vs Defect
-            if defect_type == 'ok' or defect_type == 'normal':
+            # Handle OK outcome
+            elif outcome == "OK":
                 message = f"""
-✅ **KẾT QUẢ: KHÔNG CÓ LỖI (OK)**
+✅ **KẾT QUẢ: SẢN PHẨM BÌNH THƯỜNG (OK)**
 
 **Độ tin cậy:** {confidence:.0%}
 
 **Nhận xét:**
-{defect_profile['defect_description']}
+{defect_profile['defect_description'] if defect_profile else 'Sản phẩm không có lỗi'}
 
 **Thông tin sản phẩm:**
-- Khách hàng: {defect_profile['customer']}
-- Mã SP: {defect_profile['part_code']}
-- Tên SP: {defect_profile['part_name']}
+- Khách hàng: {defect_profile['customer'] if defect_profile else 'N/A'}
+- Mã SP: {defect_profile['part_code'] if defect_profile else 'N/A'}
+- Tên SP: {defect_profile['part_name'] if defect_profile else 'N/A'}
 
-Sản phẩm đạt chuẩn QC ✓
-                """
-            else:
+✓ Sản phẩm đạt chuẩn QC - Không phát hiện lỗi
+{context_footer}
+                """.strip()
+                await update.message.reply_text(message, parse_mode='Markdown')
+                return
+
+            # Handle DEFECT outcome
+            elif outcome == "DEFECT" and defect_profile:
                 message = f"""
 ⚠️ **PHÁT HIỆN LỖI**
 
@@ -438,9 +459,10 @@ Sản phẩm đạt chuẩn QC ✓
 - Mức độ nghiêm trọng: {defect_profile['severity']}
 
 **Keywords:** {', '.join(defect_profile['keywords'])}
-                """
+{context_footer}
+                """.strip()
 
-            await update.message.reply_text(message, parse_mode='Markdown')
+                await update.message.reply_text(message, parse_mode='Markdown')
 
             # Send reference image if available
             if defect_profile.get('reference_images'):

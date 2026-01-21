@@ -88,9 +88,18 @@ class DefectIncidentResponse(BaseModel):
         from_attributes = True
 
 
+class TopKMatch(BaseModel):
+    """Schema for top-K match entry"""
+    defect_profile: DefectProfileResponse
+    confidence: float
+    rank: int
+
+
 class DefectMatchResult(BaseModel):
     """Schema for defect matching result"""
+    outcome: str  # "DEFECT" | "OK" | "UNKNOWN"
     defect_profile: Optional[DefectProfileResponse]
     confidence: float
     similarity_breakdown: Optional[dict] = None
     warning: Optional[str] = None
+    top_k: Optional[List[TopKMatch]] = None  # Top-K matches for debugging

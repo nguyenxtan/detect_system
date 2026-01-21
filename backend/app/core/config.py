@@ -31,9 +31,12 @@ class Settings(BaseSettings):
 
     # AI Model (CLIP)
     MODEL_NAME: str = "openai/clip-vit-base-patch32"
-    SIMILARITY_THRESHOLD: float = 0.6
+    SIMILARITY_THRESHOLD: float = 0.6  # Defect confidence threshold
+    OK_THRESHOLD: float = 0.85  # Higher threshold for OK (no defect) classification
+    MARGIN_THRESHOLD: float = 0.05  # Min difference between top-1 and top-2 for confident prediction
     IMAGE_WEIGHT: float = 0.6
     TEXT_WEIGHT: float = 0.4
+    TOP_K_RESULTS: int = 3  # Number of top matches to return for debugging
 
     # Phase 3: Vision Pipeline
     ENABLE_VISION_PIPELINE: bool = False  # Enable two-stage detection

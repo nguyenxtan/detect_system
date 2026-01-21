@@ -285,13 +285,18 @@ function CreateDefect() {
                 name="defect_type"
                 value={formData.defect_type}
                 onChange={handleChange}
+                helperText={
+                  formData.defect_type === 'OK'
+                    ? '✅ OK / No Defect: Upload ảnh sản phẩm BÌNH THƯỜNG (không có lỗi) để hệ thống nhận biết'
+                    : 'Chọn loại lỗi cần tạo profile'
+                }
               >
                 <MenuItem value="">
                   <em>-- Chọn loại lỗi --</em>
                 </MenuItem>
                 {defectTypes.map((type) => (
                   <MenuItem key={type.id} value={type.defect_code}>
-                    {type.display_name}
+                    {type.defect_code === 'OK' ? '✅ ' : ''}{type.display_name}
                   </MenuItem>
                 ))}
               </TextField>
