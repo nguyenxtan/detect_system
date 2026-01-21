@@ -30,7 +30,7 @@ class UserUpdate(BaseModel):
 
 class UserResponse(BaseModel):
     """Schema for user response"""
-    id: int
+    id: uuid.UUID
     username: str
     email: str
     full_name: Optional[str]
