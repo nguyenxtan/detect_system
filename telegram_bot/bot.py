@@ -381,8 +381,26 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if response.status_code == 200:
             result = response.json()
-            defect_profile = result['defect_profile']
-            confidence = result['confidence']
+            defect_profile = result.get('defect_profile')
+            confidence = result.get('confidence', 0)
+            warning = result.get('warning')
+
+            # Handle case where match is null (low confidence)
+            if defect_profile is None:
+                warning_text = f"\n\n_Lý do: {warning}_" if warning else ""
+                await update.message.reply_text(
+                    f"❌ **Không tìm thấy lỗi phù hợp**\n\n"
+                    f"Độ tin cậy: {confidence:.0%} (quá thấp)\n\n"
+                    f"**Vui lòng:**\n"
+                    f"- Chụp ảnh rõ hơn, zoom vào vùng lỗi\n"
+                    f"- Đảm bảo ánh sáng đủ\n"
+                    f"- Chụp từ góc độ rõ ràng hơn\n"
+                    f"- Hoặc liên hệ QC team để thêm loại lỗi mới{warning_text}",
+                    parse_mode='Markdown'
+                )
+                return
+
+            # Normal case: defect found
             defect_type = defect_profile['defect_type'].lower()
 
             # Format response differently for OK vs Defect
@@ -442,13 +460,41 @@ Sản phẩm đạt chuẩn QC ✓
                     print(f"Error sending reference image: {e}")
 
         elif response.status_code == 404:
-            await update.message.reply_text(
-                "❌ Không tìm thấy lỗi phù hợp.\n\n"
-                "Độ tin cậy quá thấp. Vui lòng:\n"
-                "- Chụp ảnh rõ hơn\n"
-                "- Đảm bảo ánh sáng đủ\n"
-                "- Hoặc liên hệ QC team để thêm loại lỗi mới"
-            )
+            # Parse error detail to differentiate between missing profiles vs low confidence
+            try:
+                error_detail = response.json().get('detail', '')
+            except:
+                error_detail = ''
+
+            # Case A: No defect profiles configured for this product
+            if 'No defect profiles configured' in error_detail or 'No defect profiles' in error_detail:
+                await update.message.reply_text(
+                    "❌ **Chưa có dữ liệu lỗi cho sản phẩm này**\n\n"
+                    "Hệ thống chưa được cấu hình defect profiles cho sản phẩm bạn đã chọn.\n\n"
+                    "**Vui lòng:**\n"
+                    "- Kiểm tra lại sản phẩm đã chọn (/context)\n"
+                    "- Hoặc liên hệ QC/Admin để thêm dữ liệu lỗi cho sản phẩm này\n\n"
+                    "_Lưu ý: Admin cần tạo defect profiles trên web portal trước._",
+                    parse_mode='Markdown'
+                )
+            # Case B: Profiles exist but confidence too low
+            elif 'No confident match found' in error_detail or 'confidence' in error_detail.lower():
+                await update.message.reply_text(
+                    "❌ **Không tìm thấy lỗi phù hợp**\n\n"
+                    "Độ tin cậy quá thấp. Vui lòng:\n"
+                    "- Chụp ảnh rõ hơn, zoom vào vùng lỗi\n"
+                    "- Đảm bảo ánh sáng đủ\n"
+                    "- Chụp từ góc độ rõ ràng hơn\n"
+                    "- Hoặc liên hệ QC team để thêm loại lỗi mới vào hệ thống",
+                    parse_mode='Markdown'
+                )
+            # Fallback: Generic 404 error
+            else:
+                await update.message.reply_text(
+                    f"❌ Không tìm thấy kết quả phù hợp.\n\n"
+                    f"Chi tiết: {error_detail}\n\n"
+                    f"Vui lòng liên hệ admin để được hỗ trợ."
+                )
         else:
             await update.message.reply_text(
                 f"❌ Lỗi API: {response.status_code}\n"

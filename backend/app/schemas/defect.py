@@ -90,6 +90,7 @@ class DefectIncidentResponse(BaseModel):
 
 class DefectMatchResult(BaseModel):
     """Schema for defect matching result"""
-    defect_profile: DefectProfileResponse
+    defect_profile: Optional[DefectProfileResponse]
     confidence: float
-    similarity_breakdown: dict
+    similarity_breakdown: Optional[dict] = None
+    warning: Optional[str] = None

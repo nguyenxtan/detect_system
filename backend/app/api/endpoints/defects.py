@@ -258,10 +258,14 @@ async def match_defect(
         profile_dicts
     )
 
+    # If confidence is too low, return 200 with null match and warning
+    # (Instead of 404, which is semantically incorrect)
     if confidence < settings.SIMILARITY_THRESHOLD:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No confident match found (confidence: {confidence:.2f})"
+        return DefectMatchResult(
+            defect_profile=None,
+            confidence=confidence,
+            similarity_breakdown=None,
+            warning=f"No confident match found. Confidence {confidence:.2%} is below threshold {settings.SIMILARITY_THRESHOLD:.2%}. Please improve image quality or add more defect profiles."
         )
 
     # Save uploaded image to disk
