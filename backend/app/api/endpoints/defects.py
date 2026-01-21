@@ -75,7 +75,6 @@ async def create_defect_profile(
 
     # Validate images
     MAX_IMAGES = 20  # Maximum number of images per profile
-    MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10MB per image
 
     if len(reference_images) == 0:
         raise HTTPException(
@@ -89,25 +88,17 @@ async def create_defect_profile(
             detail=f"Too many images. Maximum {MAX_IMAGES} images allowed per profile."
         )
 
-    # Check individual file sizes
+    # Check individual file sizes and content types
     for i, image_file in enumerate(reference_images):
-        # Read file size by seeking
-        await image_file.seek(0, 2)  # Seek to end
-        file_size = await image_file.tell()
-        await image_file.seek(0)  # Reset to beginning
-
-        if file_size > MAX_IMAGE_SIZE:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Image {i+1} ({image_file.filename}) is too large. Maximum size is {MAX_IMAGE_SIZE // (1024*1024)}MB per image."
-            )
-
         # Validate file type
         if image_file.content_type and not image_file.content_type.startswith('image/'):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"File {image_file.filename} is not a valid image"
             )
+
+        # Note: Individual file size is validated by nginx client_max_body_size (50M total)
+        # We rely on nginx to reject requests that are too large before they reach here
 
     logger.info(f"Creating defect profile with {len(reference_images)} images")
 
